@@ -1,0 +1,231 @@
+<!-- 
+  INSTRUCCIÓN:
+  Reemplaza el contenido COMPLETO de tu archivo index.html con este código.
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calabozos & Bufones – Versión Definitiva 1.5</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-900 text-slate-100 antialiased">
+
+  <!-- ================================== -->
+  <!-- MEJORA: PANTALLAS DE INICIO Y MENÚ -->
+  <!-- ================================== -->
+  <div id="startScreen" class="fixed inset-0 bg-slate-900 z-[3000] flex flex-col items-center justify-center p-4 text-center bg-cover bg-center" style="background-image: url('https://i.imgur.com/aO4k5vA.jpeg');">
+    <div class="bg-black/70 p-8 rounded-xl shadow-2xl backdrop-blur-sm">
+      <img src="logo/logo c&b.jpeg" alt="Logo" class="w-48 h-48 mx-auto rounded-full border-4 border-amber-400/50 shadow-lg mb-4">
+      <h1 class="text-5xl md:text-6xl font-extrabold font-title text-amber-300 tracking-wider" style="text-shadow: 2px 2px 8px #000;">Calabozos & Bufones</h1>
+      <p class="text-slate-300 mt-2">Una aventura de dudosa epicidad.</p>
+      <div id="menuButtons" class="mt-8 flex flex-col gap-4 w-64 mx-auto">
+        <button id="btnNewGame" class="menu-button bg-amber-600 hover:bg-amber-500">Nueva Aventura</button>
+        <button id="btnContinueGame" class="menu-button bg-sky-700 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Continuar Partida</button>
+        <button id="btnCredits" class="menu-button bg-slate-700 hover:bg-slate-600">Créditos</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="charSelectScreen" class="fixed inset-0 bg-slate-900/90 z-[2900] flex-col items-center justify-center p-4 hidden backdrop-blur-md">
+    <h2 class="text-4xl font-bold font-title text-amber-300 mb-6">Elige a tu disfuncional equipo</h2>
+    <div id="heroSelectionContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl">
+      <!-- Las tarjetas de héroes se generarán aquí con JS -->
+    </div>
+    <button id="btnStartAdventure" class="menu-button bg-green-600 hover:bg-green-500 mt-8 text-2xl px-10 py-4">¡Comenzar Aventura!</button>
+  </div>
+
+  <!-- ================================== -->
+  <!-- FIN DE PANTALLAS DE INICIO         -->
+  <!-- ================================== -->
+
+  <div id="tooltip"></div>
+  <div id="kill-cam-overlay"><img id="kill-cam-image" src="" alt="Victory Pose"></div>
+  <div id="roll-visualizer"></div>
+
+  <!-- MEJORA: La interfaz del juego está oculta por defecto -->
+  <div id="game-ui" class="hidden">
+    <header class="p-4 border-b border-slate-700 flex items-center justify-between shadow-lg">
+      <div class="flex items-center gap-3">
+        <img src="logo/logo c&b.jpeg" alt="Logo Calabozos & Bufones" class="h-28 w-28 rounded shadow-md bg-slate-800 border border-slate-700">
+        <h1 class="text-xl md:text-2xl font-bold tracking-wider">Calabozos & Bufones</h1>
+      </div>
+      <div id="actTitle" class="text-lg opacity-90 font-title text-amber-400"></div>
+    </header>
+
+    <main class="grid grid-cols-1 lg:grid-cols-4 gap-4 p-4">
+      <!-- ... (El resto del main se mantiene igual) ... -->
+      <section class="lg:col-span-1 space-y-4">
+        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
+            <h2 class="font-semibold text-lg">Héroes & Acciones</h2>
+            <div id="statusPanel" class="mt-2 text-center text-amber-300 bg-slate-900/50 p-2 rounded-lg text-sm font-semibold"></div>
+            <div id="heroesPanel" class="mt-2 grid grid-cols-1 gap-3 max-h-[calc(100vh-250px)] overflow-y-auto scroll-slim pr-2"></div>
+        </div>
+      </section>
+      <section class="lg:col-span-2 space-y-4">
+        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-lg">Mazmorra Inestable</h2>
+            <div class="flex gap-2">
+              <button id="btnSaveGame" class="bg-sky-700 hover:bg-sky-600 rounded-lg px-3 py-1.5 text-sm transition-colors">Guardar</button>
+              <button id="btnLoadGame" class="bg-green-700 hover:bg-green-600 rounded-lg px-3 py-1.5 text-sm transition-colors">Cargar</button>
+              <button id="btnGenDungeon" class="bg-teal-600 hover:bg-teal-500 rounded-lg px-3 py-1.5 text-sm transition-colors">Nueva Mazmorra</button>
+              <button id="btnDM" class="bg-purple-700 hover:bg-purple-600 rounded-lg px-3 py-1.5 text-sm">Modo DJ</button>
+            </div>
+          </div>
+          <div class="mt-3 overflow-auto border border-slate-700 rounded-xl relative" id="mapContainer">
+            <div id="map" class="grid"></div>
+            <div id="floatingTextContainer" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+            <canvas id="ai-intent-canvas"></canvas>
+          </div>
+        </div>
+      </section>
+      <section class="lg:col-span-1 space-y-4">
+        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
+          <h2 class="font-semibold text-lg">Iniciativa & Turnos</h2>
+          <div class="text-xs text-slate-400">Ronda: <span id="roundCounter">0</span></div>
+          <div class="mt-2 flex gap-2">
+            <button id="btnRollInit" class="bg-indigo-600 hover:bg-indigo-500 rounded-lg px-3 py-1.5 text-sm transition-colors">Tirar Iniciativa</button>
+            <button id="btnNextTurn" class="bg-indigo-700 hover:bg-indigo-600 rounded-lg px-3 py-1.5 text-sm transition-colors">Siguiente Turno</button>
+          </div>
+          <div id="currentTurn" class="mt-1 text-lg font-bold font-title">—</div>
+          <div id="initOrder" class="mt-1 flex flex-wrap gap-1"></div>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
+          <h2 class="font-semibold text-lg">Bestiario de los Absurdos</h2>
+          <div id="enemiesList" class="mt-3 space-y-2 max-h-64 overflow-y-auto scroll-slim pr-2"></div>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
+          <h2 class="font-semibold text-lg">Registro de Sucesos</h2>
+          <div id="log" class="mt-2 text-xs max-h-48 overflow-auto scroll-slim pr-1 leading-5"></div>
+        </div>
+        <div id="missionPanel" class="p-3 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
+          <h2 class="font-semibold text-lg">Sinopsis del Acto</h2>
+          <p id="actSynopsis" class="mt-1 text-sm leading-relaxed"></p>
+          <div class="mt-2 text-sm">
+            <div class="text-xs uppercase tracking-wider text-slate-400">Cliente: <span id="missionFaction"></span></div>
+            <p id="missionDescription" class="mt-1"></p>
+            <div id="missionObjective" class="mt-2 font-mono text-xs bg-slate-900 p-2 rounded"></div>
+          </div>
+        </div>
+        <div id="djPanel" class="p-3 rounded-xl bg-purple-900/50 border border-purple-700 shadow-md hidden">
+          <h2 class="font-semibold text-lg text-purple-300">Panel del Director del Caos</h2>
+          <div class="mt-3">
+              <label for="actSelector" class="text-xs uppercase text-purple-400">Cambiar de Acto</label>
+              <select id="actSelector" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1"></select>
+          </div>
+          <div class="mt-3">
+              <div class="text-xs uppercase text-purple-400">Pintar Mazmorra</div>
+              <div class="mt-1 grid grid-cols-3 gap-2">
+                  <button data-tool="wall" class="djtool bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-sm">Pared</button>
+                  <button data-tool="floor" class="djtool bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-sm">Suelo</button>
+                  <button data-tool="door" class="djtool bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-sm">Puerta</button>
+                  <button data-tool="trap" class="djtool bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-sm">Trampa</button>
+                  <button data-tool="chest" class="djtool bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-sm">Cofre</button>
+              </div>
+          </div>
+          <div class="mt-3">
+              <div class="text-xs uppercase text-purple-400">Invocar Aberración</div>
+              <select id="enemySpawner" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1"></select>
+              <div class="mt-2">
+                <select id="enemyTier" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1">
+                  <option value="basic">Básico</option>
+                  <option value="elite">Élite</option>
+                  <option value="boss">Jefe</option>
+                </select>
+              </div>
+              <button id="btnSpawnEnemy" class="w-full mt-2 bg-rose-600 hover:bg-rose-500 rounded-lg px-3 py-1.5 text-sm">Colocar Monstruo</button>
+          </div>
+          <div class="mt-3">
+            <div class="text-xs uppercase text-purple-400">Niebla de Guerra</div>
+            <label class="flex items-center gap-2 mt-1">
+              <input type="checkbox" id="toggleFog" class="accent-purple-500">
+              <span class="text-sm">Mostrar toda la mazmorra</span>
+            </label>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  
+  <button id="toggleMusic" title="Pausar/Reanudar música (M)">🎵</button>
+
+  <div id="heroModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+    <div id="modalContent" class="bg-slate-800 border border-slate-600 rounded-xl max-w-2xl w-full max-h-full overflow-y-auto scroll-slim p-6 relative"></div>
+  </div>
+
+  <!-- MEJORA: Caja para los mensajes del tutorial -->
+  <div id="tutorialBox" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-indigo-900/80 border-2 border-indigo-500 rounded-xl p-4 max-w-3xl text-center shadow-lg backdrop-blur-sm z-[2500] hidden transition-all duration-300">
+    <p id="tutorialText" class="text-lg text-indigo-200"></p>
+  </div>
+
+  <!-- ... (Las plantillas <template> se mantienen igual) ... -->
+  <template id="tpl-hero-card">
+    <div class="rounded-lg border border-slate-700 bg-slate-900/50 p-3 transition-all duration-300 flex flex-col gap-2">
+        <div class="flex gap-3">
+            <div class="w-1/3 flex-shrink-0">
+                <img class="hero-portrait w-full h-auto rounded-md object-cover aspect-[3/4]" src="https://placehold.co/150x200/1f2937/e0e0e0?text=Heroe" alt="Retrato del Héroe">
+            </div>
+            <div class="w-2/3">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <div class="font-semibold font-title text-lg name"></div>
+                        <div class="text-xs text-slate-400 class"></div>
+                    </div>
+                    <div class="text-right text-xs">
+                        <div>NV <span class="level font-bold"></span></div>
+                        <div>CA <span class="ac font-bold"></span></div>
+                    </div>
+                </div>
+                <div class="mt-1 w-full bg-slate-700 rounded-full h-2.5"><div class="bg-red-600 h-2.5 rounded-full hp-bar" style="width: 100%"></div></div>
+                <div class="text-xs text-center mt-1">PV <span class="hp"></span>/<span class="hpmax"></span></div>
+                <div class="mt-1 w-full bg-slate-700 rounded-full h-2.5"><div class="bg-sky-500 h-2.5 rounded-full res-bar" style="width: 100%"></div></div>
+                <div class="text-xs text-center mt-1 res-name">Recurso <span class="res"></span>/<span class="resmax"></span></div>
+            </div>
+        </div>
+        <div class="action-buttons mt-1 grid grid-cols-4 gap-2">
+            <button class="btn-move bg-emerald-700 hover:bg-emerald-600 rounded px-2 py-1 text-xs transition-colors">Mover</button>
+            <button class="btn-attack bg-rose-700 hover:bg-rose-600 rounded px-2 py-1 text-xs transition-colors">Atacar</button>
+            <button class="btn-defend bg-cyan-700 hover:bg-cyan-600 rounded px-2 py-1 text-xs transition-colors">Defender</button>
+            <button class="btn-revive bg-amber-600 hover:bg-amber-500 rounded px-2 py-1 text-xs transition-colors">Reanimar</button>
+            <button class="btn-undo-move col-span-4 bg-gray-600 hover:bg-gray-500 rounded px-2 py-1 text-xs transition-colors hidden">Deshacer Movimiento</button>
+        </div>
+        <div class="extra-buttons mt-1 grid grid-cols-3 gap-2">
+            <button class="btn-details bg-sky-700 hover:bg-sky-600 rounded px-2 py-1 text-xs transition-colors">Ver Ficha</button>
+            <button class="btn-attrs bg-amber-700 hover:bg-amber-600 rounded px-2 py-1 text-xs transition-colors">Atributos</button>
+            <button class="btn-bag bg-lime-700 hover:bg-lime-600 rounded px-2 py-1 text-xs transition-colors">Bolsa</button>
+        </div>
+        <div class="mt-2 grid grid-cols-2 gap-2 special-actions"></div>
+    </div>
+  </template>
+
+  <template id="tpl-enemy-card">
+    <div class="rounded-lg border border-slate-700 bg-slate-900/50 p-3 transition-all duration-300 flex gap-3 relative">
+        <div class="w-1/3 flex-shrink-0">
+            <img class="enemy-portrait w-full h-auto rounded-md object-cover aspect-[3/4]" src="https://placehold.co/150x200/1f2937/e0e0e0?text=Enemigo" alt="Retrato del Enemigo">
+        </div>
+        <div class="w-2/3 flex flex-col justify-between">
+            <div>
+                <div class="font-semibold font-title text-lg name"></div>
+                <div class="text-xs text-slate-400 kind"></div>
+                <div class="mt-1 w-full bg-slate-700 rounded-full h-2.5"><div class="bg-rose-500 h-2.5 rounded-full hp-bar" style="width: 100%"></div></div>
+                <div class="text-xs text-center mt-1">PV <span class="hp"></span>/<span class="hpmax"></span></div>
+                <div class="mt-1 text-xs text-center">CA <span class="ac font-bold"></span> | ATQ <span class="attack font-bold"></span> | DMG <span class="dmg font-bold"></span> | VEL <span class="speed font-bold"></span></div>
+            </div>
+            <div class="mt-2 text-xs abilities"></div>
+            <button class="btn-details mt-2 bg-sky-700 hover:bg-sky-600 rounded px-2 py-1 text-xs transition-colors w-full">Ver Ficha</button>
+        </div>
+    </div>
+  </template>
+
+  <script src="game.js"></script>
+</body>
+</html>

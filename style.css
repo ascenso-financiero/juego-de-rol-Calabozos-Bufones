@@ -1,0 +1,217 @@
+/* ==========================================================================
+   Configuración Base y Fuentes
+   ========================================================================== */
+html { 
+    scroll-behavior: smooth; 
+}
+body { 
+    font-family: 'Inter', sans-serif; 
+}
+h1, h2, h3, button, .font-title { 
+    font-family: 'Cinzel', serif; 
+}
+.scroll-slim { 
+    scrollbar-width: thin; 
+    scrollbar-color: #4b5563 #1f2937; 
+}
+button:disabled { 
+    background-color: #4b5563 !important; 
+    cursor: not-allowed !important; 
+}
+
+/* ==========================================================================
+   Mapa y Celdas
+   ========================================================================== */
+.cell { 
+    width: 32px; 
+    height: 32px; 
+    box-sizing: border-box; 
+    position: relative; 
+    transition: background-color 0.3s, box-shadow 0.4s; 
+}
+
+/* Estilos de Actos (Paredes y Suelos) */
+.wall-act1 { background-color: #4a4a52; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cg fill='%233a3a42' fill-opacity='0.4'%3E%3Cpath fill-rule='evenodd' d='M0 0h4v4H0V0zm4 4h4v4H4V4z'/%3E%3C/g%3E%3C/svg%3E"); }
+.floor-act1 { background-color: #6b4f2d; }
+.wall-act2 { background-color: #2c5282; }
+.floor-act2 { background-color: #a0aec0; }
+.wall-act3 { background-color: #581c87; }
+.floor-act3 { background-color: #e9d5ff; }
+.wall-act4 { background-color: #000; }
+.floor-act4 { background-color: #111; }
+
+/* Elementos del Mapa */
+.door { background: linear-gradient(#856d4b,#5a452c); font-weight: bold; color: #f3e5ab; display:flex; align-items: center; justify-content: center; font-size: 20px; }
+.trap::after { content: '!!'; font-size: 20px; color: #ef4444; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.5; font-weight: 900; text-shadow: 0 0 4px black; }
+.chest::after { content: '📦'; font-size: 20px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.boss-object::after { content: '📜'; font-size: 20px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+/* Estados de Celda */
+.fog { filter: brightness(0.2) saturate(0.5); transition: filter 0.7s cubic-bezier(.4,0,.2,1); }
+.reachable, .targetable-ally, .interactable { cursor: pointer; }
+.targetable { cursor: crosshair; }
+.reachable { outline: 2px dashed #93c5fd; outline-offset: -2px; background-color: rgba(147, 197, 253, 0.2); }
+.targetable { outline: 2px solid #fb7185; outline-offset: -2px; background-color: rgba(251, 113, 133, 0.2); }
+.targetable-ally { outline: 2px solid #4ade80; outline-offset: -2px; background-color: rgba(74, 222, 128, 0.2); }
+.in-range { background-color: rgba(250, 204, 21, 0.15); }
+.aoe-preview { background-color: rgba(239, 68, 68, 0.4); border: 1px dashed #ef4444; }
+.interactable { box-shadow: 0 0 12px 4px #facc15; }
+
+/* ==========================================================================
+   Tokens y Elementos sobre el Mapa
+   ========================================================================== */
+.token-container { 
+    position: relative; 
+    width: 100%; 
+    height: 100%; 
+}
+.token { 
+    width: 26px; 
+    height: 26px; 
+    border-radius: 9999px; 
+    border: 2px solid rgba(255,255,255,0.8); 
+    display:flex; 
+    align-items:center; 
+    justify-content:center; 
+    font-size: 14px; 
+    font-weight: 700; 
+    transition: all 0.2s ease; 
+    position: relative; 
+    z-index: 5; 
+}
+.hero { background:#22c55e; color:#0b210f; }
+.enemy { background:#ef4444; color:#2b0b0b; }
+.token.downed { opacity: 0.5; filter: grayscale(1); transform: rotate(-90deg); }
+
+/* Barras de Salud sobre Tokens */
+.token-hp-bar { position: absolute; bottom: -6px; left: 1px; width: 28px; height: 4px; background-color: #4b5563; border-radius: 2px; border: 1px solid #1f2937; }
+.token-hp-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+.token-hp-bar-fill.hero { background-color: #16a34a; }
+.token-hp-bar-fill.enemy { background-color: #dc2626; }
+
+/* Indicador de Ventaja/Desventaja */
+.advantage-indicator { 
+    position: absolute; 
+    top: -10px; 
+    left: -10px; 
+    font-size: 20px; 
+    z-index: 10; 
+    pointer-events: none; 
+    text-shadow: 0 0 4px black;
+}
+
+/* Estados de Tokens (Buffs/Debuffs) */
+.boss-furious { transform: scale(1.2); box-shadow: 0 0 12px 6px #dc2626; }
+.boss-invulnerable { filter: grayscale(1) brightness(1.5); }
+.token.is-confused { animation: wobble 0.8s infinite; }
+@keyframes wobble { 0%, 100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-2px) rotate(-3deg); } 75% { transform: translateX(2px) rotate(3deg); } }
+.token-state-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.token-state-overlay.is-defending::after { content: ''; position: absolute; top: -2px; left: -2px; width: 34px; height: 34px; border: 2px solid #22d3ee; border-radius: 50%; animation: shield-pulse 1.5s infinite; }
+@keyframes shield-pulse { 0%, 100% { opacity: 0.8; transform: scale(0.95); } 50% { opacity: 0.4; transform: scale(1.05); } }
+.token-state-overlay.is-stunned::before { content: '💫'; font-size: 16px; position: absolute; top: -8px; left: 50%; transform: translateX(-50%); animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: translateX(-50%) rotate(0deg); } to { transform: translateX(-50%) rotate(360deg); } }
+
+/* ==========================================================================
+   Elementos de UI (Paneles, Botones, Modales)
+   ========================================================================== */
+.current-turn { box-shadow: 0 0 12px 4px #6366f1; }
+.end-turn-glow { animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); } }
+
+#toggleMusic { 
+    position: fixed; bottom: 20px; right: 24px; z-index: 100; 
+    background: #222; color: #fff; border-radius: 50%; 
+    width: 44px; height: 44px; font-size: 1.5rem; opacity: 0.85; 
+    box-shadow: 0 2px 8px #0004; border: 2px solid #4a4a52; 
+    transition: all .2s; 
+    display: flex; align-items: center; justify-content: center; 
+}
+#toggleMusic:hover { opacity: 1; transform: scale(1.1); }
+
+/* Tooltip */
+#tooltip { 
+    position: fixed; 
+    background: #1f2937; 
+    color: #e5e7eb; 
+    border: 1px solid #4b5563; 
+    padding: 8px; 
+    border-radius: 6px; 
+    font-size: 12px; 
+    pointer-events: none; 
+    z-index: 1000; 
+    opacity: 0; 
+    transition: opacity 0.2s; 
+    max-width: 250px; 
+}
+
+/* Modales */
+#heroModal { transition: opacity 0.3s ease; }
+
+/* ==========================================================================
+   Estilos del Tutorial
+   ========================================================================== */
+.tutorial-highlight {
+    outline: 4px solid #facc15 !important;
+    outline-offset: -3px;
+    box-shadow: 0 0 20px 8px #facc15;
+    animation: tutorial-pulse 1.5s infinite;
+    z-index: 100;
+}
+
+@keyframes tutorial-pulse {
+    0%, 100% {
+        box-shadow: 0 0 20px 8px rgba(250, 204, 21, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 30px 12px rgba(250, 204, 21, 0.4);
+    }
+}
+
+/* ==========================================================================
+   Efectos Visuales y Animaciones
+   ========================================================================== */
+
+/* Animación de Texto Flotante */
+.floating-text { position: absolute; font-size: 16px; font-weight: bold; pointer-events: none; animation: float-up 1.5s forwards; text-shadow: 1px 1px 2px black; z-index: 20; }
+@keyframes float-up { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-40px); opacity: 0; } }
+
+/* Animación de Muerte */
+@keyframes fade-smoke { 0% { opacity: 0.7; } 100% { opacity: 0; transform: scale(1.5);} }
+
+/* Animación de Sacudida */
+@keyframes shake { 0%, 100% { transform: translateX(0); } 10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); } 20%, 40%, 60%, 80% { transform: translateX(4px); } }
+.shake { animation: shake 0.5s ease-in-out; }
+
+/* Efecto Screen Shake */
+@keyframes screen-shake { 0%, 100% { transform: translate(0, 0); } 10%, 30%, 50%, 70%, 90% { transform: translate(-3px, 2px); } 20%, 40%, 60%, 80% { transform: translate(3px, -2px); } }
+.screen-shake { animation: screen-shake 0.3s ease-in-out; }
+
+/* Kill Cam */
+#kill-cam-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.5s; }
+#kill-cam-image { max-width: 40%; max-height: 80%; border-radius: 1rem; box-shadow: 0 0 30px #fff; transform: scale(0.5); transition: transform 0.5s cubic-bezier(.34,1.56,.64,1); }
+
+/* Visualizador de Tiradas */
+#roll-visualizer { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 20, 30, 0.95); border: 2px solid #4b5563; border-radius: 0.75rem; padding: 1.5rem; z-index: 2100; text-align: center; font-family: 'Cinzel', serif; display: none; opacity: 0; transition: opacity 0.3s; }
+.roll-crit { color: #f59e0b; font-weight: 800; text-shadow: 0 0 8px #f59e0b; }
+.roll-fumble { color: #ef4444; font-weight: 800; text-shadow: 0 0 8px #ef4444; }
+.roll-success { color: #22c55e; }
+.roll-fail { color: #9ca3af; }
+
+/* Colores del Log de Sucesos */
+.log-line { transition: all 0.3s; }
+.log-line.log-damage { color: #f87171; }
+.log-line.log-heal { color: #4ade80; }
+.log-line.log-crit { color: #f59e0b; font-weight: bold; }
+.log-line.log-info { color: #60a5fa; }
+.log-line.log-game { color: #fcd34d; font-weight: bold; }
+
+/* Canvas para Intenciones de la IA */
+#ai-intent-canvas { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    pointer-events: none; 
+    z-index: 15; 
+}
