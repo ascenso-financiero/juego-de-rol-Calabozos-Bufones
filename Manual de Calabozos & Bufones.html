@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de Juego: Calabozos & Bufones</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        h1, h2, h3, h4, .font-title {
+            font-family: 'Cinzel', serif;
+        }
+        .nav-link.active {
+            color: #facc15; /* amber-400 */
+            border-left-color: #facc15;
+            background-color: #374151; /* gray-700 */
+            font-weight: 700;
+        }
+        .nav-link {
+            transition: all 0.2s ease-in-out;
+        }
+        .content-card {
+            background-color: #1f2937; /* gray-800 */
+            border: 1px solid #374151; /* gray-700 */
+            border-radius: 0.75rem;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .icon {
+            width: 1.5rem;
+            height: 1.5rem;
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+        .prose-custom code {
+            color: #e5e7eb;
+            background-color: #4b5563;
+            padding: 0.2em 0.5em;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        .prose-custom blockquote {
+            border-left-color: #6366f1;
+            background-color: rgba(99, 102, 241, 0.1);
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-300">
+
+    <header class="py-8 bg-slate-800 border-b-4 border-amber-400 shadow-2xl">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
+
+    <!-- Contenedor del logo -->
+    <div class="inline-block bg-slate-700 rounded-2xl p-4 shadow-lg border border-amber-400 mb-4">
+      <img src="logo/logo c&b.jpeg" 
+           alt="Logo Calabozos & Bufones" 
+           class="w-32 h-32 mx-auto">
+    </div>
+
+    <h1 class="text-5xl font-extrabold tracking-wider text-white">
+      Calabozos & Bufones
+    </h1>
+    <p class="mt-2 text-xl text-amber-300 font-title">
+      El Manual Oficial del Caos Organizado
+    </p>
+  </div>
+</header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="lg:flex lg:gap-12">
+            <!-- Barra de Navegación Lateral -->
+            <aside class="lg:w-1/4 lg:sticky lg:top-8 self-start mb-10 lg:mb-0">
+                <nav class="space-y-2 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <h3 class="font-title text-xl font-bold text-white mb-4 px-3">Contenidos</h3>
+                    <a href="#introduccion" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">Introducción</a>
+                    <a href="#interfaz" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">La Interfaz de Juego</a>
+                    <a href="#como-jugar" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">Cómo Jugar</a>
+                    <a href="#combate" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">El Arte del Combate</a>
+                    <a href="#mecanicas-avanzadas" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">Mecánicas Avanzadas</a>
+                    <a href="#heroes" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">Héroes y Progresión</a>
+                    <a href="#modo-dj" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">Director del Caos</a>
+                    <a href="#controles" class="nav-link group flex items-center px-3 py-2 text-base font-medium rounded-md border-l-4 border-transparent hover:bg-slate-700 hover:text-white">Controles y Atajos</a>
+                </nav>
+            </aside>
+
+            <!-- Contenido Principal -->
+            <main class="lg:w-3/4 text-lg leading-relaxed prose-custom">
+                
+                <section id="introduccion" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-4">Bienvenido, Aventurero (o algo parecido)</h2>
+                    <p>Has tropezado con el manual de <strong>Calabozos & Bufones</strong>, un reino donde las gestas épicas suelen terminar con un resbalón cómico y los monstruos tienen más problemas existenciales que tú en un lunes por la mañana. Este no es el típico juego de rol; es una sátira táctica por turnos diseñada para desafiar tu ingenio y tu sentido del humor.</p>
+                    <p class="text-amber-300">Tu misión: guiar a un inepto pero extrañamente capaz grupo de héroes a través de una campaña para salvar la realidad... o al menos evitar que el papeleo se acumule. Este manual es tu brújula en el caos. ¡Úsala bien!</p>
+                </section>
+
+                <section id="interfaz" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-6">La Interfaz de Juego: Tu Ventana al Caos</h2>
+                    <img src="manual/layout.webp" alt="Layout de la Interfaz" class="rounded-lg shadow-lg w-full mb-6 border-2 border-slate-600">
+                    <div class="grid md:grid-cols-3 gap-6 text-base">
+                        <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                            <h4 class="font-title font-semibold text-xl text-white mb-2">1. Panel del Jugador (Izquierda)</h4>
+                            <p>Tu centro de mando. Aquí controlas a tus héroes, ves sus estadísticas y activas sus habilidades.</p>
+                        </div>
+                        <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                            <h4 class="font-title font-semibold text-xl text-white mb-2">2. El Escenario (Centro)</h4>
+                            <p>El corazón del juego. El mapa de la mazmorra donde se desarrolla toda la acción, grande y centrado para tu comodidad visual.</p>
+                        </div>
+                        <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                            <h4 class="font-title font-semibold text-xl text-white mb-2">3. Panel de Información (Derecha)</h4>
+                            <p>Tu fuente de inteligencia. Consulta el orden de turnos, los enemigos, el registro de sucesos y los objetivos de tu misión.</p>
+                        </div>
+                    </div>
+                </section>
+                
+                <section id="como-jugar" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-6">Cómo Jugar: El Flujo de la Aventura</h2>
+                    <h3 class="text-2xl font-semibold text-amber-300 mb-4">Fase de Exploración (Cuando todo está en calma)</h3>
+                    <div class="space-y-4 text-base">
+                        <div class="flex items-start"><svg class="icon text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><div><strong>Moverse:</strong> Haz clic en <code>Mover</code>. Las casillas alcanzables se iluminarán. Haz clic en tu destino.</div></div>
+                        <div class="flex items-start"><svg class="icon text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg><div><strong>Explorar:</strong> Al moverte, la <strong>Niebla de Guerra</strong> se disipa, revelando nuevas áreas.</div></div>
+                        <div class="flex items-start"><svg class="icon text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg><div><strong>Interactuar:</strong> Si un objeto (cofre 📦, puerta) brilla con un aura amarilla, significa que un héroe adyacente puede hacer clic sobre él para interactuar.</div></div>
+                    </div>
+                     <blockquote><p class="text-base"><strong>¡Cuidado con las Trampas!</strong> Las casillas marcadas con un <code>!!</code> son trampas. Si un héroe pisa una, recibirá daño y la trampa se desactivará.</p></blockquote>
+                </section>
+
+                <section id="combate" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-6">El Arte del Combate: Mover y Actuar</h2>
+                    <h3 class="text-2xl font-semibold text-amber-300 mb-4">La Economía de Acciones: Tu Turno, Tus Reglas</h3>
+                    <p>En tu turno, cada héroe puede realizar:</p>
+                    <div class="flex flex-col md:flex-row gap-4 my-6 text-center">
+                        <div class="flex-1 bg-emerald-900/50 p-4 rounded-lg border border-emerald-700">
+                            <div class="text-5xl mb-2">🏃‍♂️</div>
+                            <h4 class="font-title text-xl font-semibold text-emerald-300">1 Acción de Movimiento</h4>
+                            <p class="text-sm">Muévete hasta tu velocidad máxima.</p>
+                        </div>
+                        <div class="text-3xl font-bold self-center text-slate-500">+</div>
+                        <div class="flex-1 bg-rose-900/50 p-4 rounded-lg border border-rose-700">
+                             <div class="text-5xl mb-2">⚔️</div>
+                            <h4 class="font-title text-xl font-semibold text-rose-300">1 Acción Principal</h4>
+                            <p class="text-sm">Ataca, defiende, usa una habilidad o un objeto.</p>
+                        </div>
+                    </div>
+                    <p>Puedes usarlas en cualquier orden. Una vez que hayas terminado, pulsa <code>Siguiente Turno</code> para ceder el paso. El botón se iluminará para recordártelo cuando hayas agotado tus acciones.</p>
+                </section>
+
+                <section id="mecanicas-avanzadas" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-6">Mecánicas Avanzadas: Domina el Campo de Batalla</h2>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-2xl font-semibold text-amber-300 mb-4">El Sistema de Cobertura</h3>
+                            <p>Usa el entorno a tu favor. Si la línea entre un atacante y un defensor está parcialmente bloqueada por un muro (en diagonal), el defensor gana <strong>+2 a su CA</strong>.</p>
+                            <pre class="bg-slate-900/50 rounded-lg p-4 text-sm font-mono border border-slate-700">
+  Atacante (A)
+      ╲
+       ╲
+      Muro (#)
+       ╱
+      ╱
+  Defensor (D) -> recibe +2 CA
+                            </pre>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-semibold text-amber-300 mb-4">Efectos de Estado</h3>
+                            <p>Los buffs (ayudas) y debuffs (perjuicios) son temporales. Su duración se reduce al final del turno del personaje afectado.</p>
+                            <blockquote><p class="text-base">Un efecto de "1 turno" durará hasta que el personaje termine su próximo turno, garantizando que siempre se pueda aprovechar.</p></blockquote>
+                            <p>Pasa el ratón sobre cualquier personaje en el mapa para ver sus efectos activos.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="heroes" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-6">Héroes y Progresión: De Ineptos a Leyendas</h2>
+                    <p>Tu equipo de inadaptados tiene el potencial de convertirse en una fuerza a tener en cuenta. Al derrotar enemigos, ganan XP. Al subir de nivel, mejoran sus estadísticas y ganas <strong>1 Punto de Atributo</strong> para personalizar su desarrollo en la pantalla de <code>Atributos</code>.</p>
+                    <div class="overflow-x-auto mt-6 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <table class="w-full text-left text-base">
+                            <thead class="text-amber-300">
+                                <tr><th class="p-4">Clase</th><th class="p-4">Atributo Principal</th><th class="p-4">Rol</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700">
+                                <tr><td class="p-4 font-semibold">Guerrero Buldero</td><td class="p-4"><code>Fuerza</code></td><td class="p-4">Tanque resistente que aguanta y reparte golpes.</td></tr>
+                                <tr><td class="p-4 font-semibold">Mago Sarcástico</td><td class="p-4"><code>Inteligencia</code></td><td class="p-4">Control de masas con poderosos hechizos de área.</td></tr>
+                                <tr><td class="p-4 font-semibold">Pícaro Bocazas</td><td class="p-4"><code>Destreza</code></td><td class="p-4">Asesino ágil que explota las debilidades del enemigo.</td></tr>
+                                <tr><td class="p-4 font-semibold">Clérigo Irreverente</td><td class="p-4"><code>Sabiduría</code></td><td class="p-4">Soporte vital que cura a los aliados y castiga a los no creyentes.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <section id="modo-dj" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-6">El Modo Director del Caos (DJ)</h2>
+                    <p>¿Te sientes creativo? El Modo DJ te da el poder de un dios del juego. Actívalo con el botón <code>Modo DJ</code> y desata tu imaginación:</p>
+                    <ul class="space-y-3 mt-4 text-base">
+                        <li class="flex"><svg class="icon text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg><strong>Pinta la Mazmorra:</strong> Rediseña el nivel a tu antojo.</li>
+                        <li class="flex"><svg class="icon text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><strong>Invoca Aberraciones:</strong> Coloca cualquier monstruo en cualquier lugar.</li>
+                        <li class="flex"><svg class="icon text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg><strong>Elimina la Niebla:</strong> Revela todo el mapa al instante.</li>
+                    </ul>
+                </section>
+                
+                <section id="controles" class="content-card">
+                    <h2 class="text-3xl font-bold text-white mb-6">Controles y Atajos de Teclado</h2>
+                    <p>Para una experiencia más fluida, utiliza estos atajos:</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 text-center">
+                        <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700"><p><kbd class="text-xl font-semibold text-white">N</kbd></p><p class="text-sm">Siguiente Turno</p></div>
+                        <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700"><p><kbd class="text-xl font-semibold text-white">I</kbd></p><p class="text-sm">Tirar Iniciativa</p></div>
+                        <div class="bg-slate-800/50 p-4 rounded-lg border border-slate-700"><p><kbd class="text-xl font-semibold text-white">M</kbd></p><p class="text-sm">Activar/Pausar Música</p></div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <footer class="text-center py-8 text-base text-slate-500 border-t-2 border-slate-800">
+        <p>Manual de Juego de Calabozos & Bufones. ¡Que la pifia te acompañe!</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sections = document.querySelectorAll('main section');
+            const navLinks = document.querySelectorAll('nav .nav-link');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        navLinks.forEach(link => {
+                            const id = link.getAttribute('href').substring(1);
+                            link.classList.toggle('active', id === entry.target.id);
+                        });
+                    }
+                });
+            }, { rootMargin: "-40% 0px -60% 0px", threshold: 0.2 });
+            sections.forEach(section => { observer.observe(section); });
+        });
+    </script>
+
+</body>
+</html>
