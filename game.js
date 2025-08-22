@@ -1456,6 +1456,17 @@ function loadGame() {
             Object.keys(parsedState).forEach(key => {
                 state[key] = parsedState[key];
             });
+
+            // --- INICIO DE LA SOLUCIÓN: REHIDRATACIÓN ---
+            // Las funciones de las habilidades se pierden al guardar.
+            // Aquí las volvemos a conectar basándonos en la clase de cada héroe.
+            state.heroes.forEach(hero => {
+                if (hero.cls && CLASSES[hero.cls]) {
+                    hero.actions = CLASSES[hero.cls].actions;
+                }
+            });
+            // --- FIN DE LA SOLUCIÓN ---
+
             log('<b>Partida cargada con éxito.</b>', 'game');
             document.getElementById('actSelector').value = state.currentAct;
             document.getElementById('actTitle').textContent = CAMPAIGN_ACTS[state.currentAct].title;
