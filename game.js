@@ -440,13 +440,31 @@ function renderMap(){
           tokenContainer.innerHTML = '';
           const tokenEl = document.createElement('div');
           const isHero = !!characterOnCell.cls;
-          tokenEl.className = `absolute token ${isHero ? 'hero' : 'enemy'}`;
+          tokenEl.className = `token ${isHero ? 'hero' : 'enemy'}`;
           tokenEl.dataset.id = characterOnCell.id;
+          
+          let imageUrl = '';
+          if (isHero) {
+              imageUrl = HERO_PORTRAITS[characterOnCell.cls];
+          } else {
+              imageUrl = ENEMY_PORTRAITS[characterOnCell.kind];
+          }
+      
+          if (imageUrl) {
+              tokenEl.style.backgroundImage = `url('${imageUrl}')`;
+          } else {
+              tokenEl.textContent = characterOnCell.name[0].toUpperCase();
+              tokenEl.style.backgroundColor = isHero ? '#22c55e' : '#ef4444';
+              tokenEl.style.display = 'flex';
+              tokenEl.style.alignItems = 'center';
+              tokenEl.style.justifyContent = 'center';
+          }
+
           if (isHero && characterOnCell.hp <= 0) { tokenEl.classList.add('downed'); }
           if (characterOnCell.isFurious) tokenEl.classList.add('boss-furious');
           if (characterOnCell.isInvulnerable) tokenEl.classList.add('boss-invulnerable');
           tokenEl.title = `${characterOnCell.name} (${isHero ? `NV ${characterOnCell.level}` : characterOnCell.tier})`;
-          tokenEl.style.left='3px'; tokenEl.style.top='3px'; tokenEl.textContent = characterOnCell.name[0].toUpperCase();
+          
           tokenContainer.appendChild(tokenEl);
 
           const statusIconsContainer = document.createElement('div');
@@ -707,17 +725,15 @@ function setMoveMode(heroId) {
           return; 
       }
   }
-  // REEMPLAZA CON ESTE BLOQUE
-const reachable = findReachableCells(hero, hero.speed);
-highlightReachable(reachable);
-state.mode = { type: 'move', actorId: heroId, reachable };
-updateStatusPanel(`Mueve a ${hero.name}.`);
-
-// CORRECCIÓN: Volvemos a aplicar el resaltado del tutorial después de que
-// highlightReachable() lo haya borrado.
-if (state.tutorial.active && state.tutorial.step === 0) {
-    queryCellEl(state.tutorial.targetCell.x, state.tutorial.targetCell.y)?.classList.add('tutorial-highlight');
-}
+  
+  const reachable = findReachableCells(hero, hero.speed);
+  highlightReachable(reachable);
+  state.mode = { type: 'move', actorId: heroId, reachable };
+  updateStatusPanel(`Mueve a ${hero.name}.`);
+  
+  if (state.tutorial.active && state.tutorial.step === 0) {
+      queryCellEl(state.tutorial.targetCell.x, state.tutorial.targetCell.y)?.classList.add('tutorial-highlight');
+  }
 }
 
 function setAttackMode(heroId){
@@ -1093,9 +1109,8 @@ function checkBossMechanics(boss) {
       const target = state.heroes.find(h => h.id === targetId) || state.enemies.find(e => e.id === targetId);
       if (!actor || !target) return;
 
-      actor.hasActed = true;      // <-- LÍNEA AÑADIDA
-      actor.canUndoMove = false;  // <-- LÍNEA AÑADIDA
-
+      actor.hasActed = true;
+      actor.canUndoMove = false;
       
       actor.res -= (ability.cost || 0);
       log(`<b>${actor.name}</b> usa <b>${ability.name}</b> sobre <b>${target.name}</b>!`, 'info');
@@ -1151,8 +1166,8 @@ function checkBossMechanics(boss) {
   
   function performAbilityAOE(actorId, center, ability) {
       const actor = state.heroes.find(h => h.id === actorId); if (!actor) return;
-      actor.hasActed = true;      // <-- LÍNEA AÑADIDA
-      actor.canUndoMove = false;  // <-- LÍNEA AÑADIDA
+      actor.hasActed = true;
+      actor.canUndoMove = false;
 
       actor.res -= (ability.cost || 0);
       log(`<b>${actor.name}</b> desata <b>${ability.name}</b> en {${center.x}, ${center.y}}!`, 'crit');
@@ -1347,18 +1362,13 @@ function onCellClick(e) {
         } else {
             log('No hay un aliado caído válido en esa casilla.');
         }
-// REEMPLAZA EL BLOQUE ANTERIOR CON ESTE:
+
 } else if (mode.type === 'ability-target') {
     const target = (mode.targetType === 'hero' ? state.heroes : state.enemies).find(t => t.pos && t.pos.x === x && t.pos.y === y);
     if (!target) { 
         log('No hay un objetivo válido ahí.'); 
         return; 
     }
-
-    // --- INICIO DE LA CORRECCIÓN DEFINITIVA ---
-    // En lugar de llamar a performAbility directamente (que es incorrecto),
-    // llamamos a la función 'use' definida en el objeto de la habilidad.
-    // Esta función 'use' ya sabe cómo llamar a performAbility con los parámetros correctos.
     const actor = state.heroes.find(h => h.id === mode.actorId);
     if (actor && mode.ability.use) {
         const context = { self: actor, ability: mode.ability };
@@ -1366,7 +1376,11 @@ function onCellClick(e) {
     } else {
         log('Error: La habilidad no se pudo ejecutar.', 'damage');
     }
-    // --- FIN DE LA CORRECCIÓN DEFINITIVA ---
+} else if (mode.type === 'ability-aoe') {
+    performAbilityAOE(mode.actorId, {x, y}, mode.ability);
+} else if (mode.type === 'none') { 
+    const adjacentHero = state.heroes.find(h => h.hp > 0 && h.pos && dist(h.pos, {x, y}) <= 1); 
+    if (adjacentHero) interactWithCell(adjacentHero, x, y); 
 }
 }
 
@@ -1498,8 +1512,30 @@ function initUI(){
   document.getElementById('btnDM').addEventListener('click', () => { state.dmMode = !state.dmMode; document.getElementById('djPanel').classList.toggle('hidden', !state.dmMode); log(`Modo Director del Caos: ${state.dmMode ? 'ACTIVADO' : 'DESACTIVADO'}`, 'game'); if (!state.dmMode) state.mode = {type:'none'}; });
   const fogCheckbox = document.getElementById('toggleFog'); fogCheckbox.checked = !state.fogEnabled; fogCheckbox.addEventListener('change', () => { state.fogEnabled = !fogCheckbox.checked; renderMap(); });
   document.addEventListener('keydown', (e) => { if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT' || state.isAnimating) return; if (e.key === 'n' || e.key === 'N') { sounds.effects.click(); nextTurn(); } if (e.key === 'i' || e.key === 'I') { sounds.effects.click(); rollInitiative(); } if (e.key === 'm' || e.key === 'M') { toggleMusic(); } });
-  document.body.addEventListener('mousemove', e => { const tooltip = document.getElementById('tooltip'); tooltip.style.left = e.pageX + 15 + 'px'; tooltip.style.top = e.pageY + 15 + 'px'; });
-}
+// REEMPLAZA LA LÍNEA ANTERIOR CON ESTE BLOQUE
+document.body.addEventListener('mousemove', e => {
+    const tooltip = document.getElementById('tooltip');
+    const mapContainer = document.getElementById('mapContainer');
+    
+    // Obtenemos la posición del cursor relativa a la ventana
+    let tooltipX = e.clientX;
+    let tooltipY = e.clientY;
+
+    // Si el cursor está sobre el mapa, ajustamos la posición
+    // teniendo en cuenta el scroll del contenedor del mapa.
+    if (mapContainer.contains(e.target)) {
+        tooltipX = e.pageX - mapContainer.scrollLeft;
+        tooltipY = e.pageY - mapContainer.scrollTop;
+    } else {
+         // Si está fuera del mapa, usamos la posición de la página directamente
+        tooltipX = e.pageX;
+        tooltipY = e.pageY;
+    }
+
+    tooltip.style.left = tooltipX + 15 + 'px';
+    tooltip.style.top = tooltipY + 15 + 'px';
+});}
+
 
 function showTooltip(text, event) { const tooltip = document.getElementById('tooltip'); tooltip.innerHTML = text; tooltip.style.opacity = 1; }
 function hideTooltip() { document.getElementById('tooltip').style.opacity = 0; }
@@ -1669,8 +1705,6 @@ function showRollResult(data) {
 }
 
 // CORRECCIÓN BUG TUTORIAL: Nueva lógica de tutorial
-// REEMPLAZAR CON ESTE CÓDIGO
-// REEMPLAZA TU FUNCIÓN advanceTutorial COMPLETA CON ESTA:
 function advanceTutorial(action) {
     if (!state.tutorial.active) return;
 
@@ -1718,8 +1752,6 @@ function advanceTutorial(action) {
             break;
     }
 }
-// REEMPLAZA TU FUNCIÓN checkTutorialStep COMPLETA CON ESTA:
-// REEMPLAZA TU FUNCIÓN checkTutorialStep COMPLETA CON ESTA:
 function checkTutorialStep() {
     if (!state.tutorial.active) return;
     const throg = state.heroes.find(h => h.cls === 'GUERRERO');
@@ -1746,13 +1778,10 @@ function checkTutorialStep() {
             }
             break;
         case 2:
-            // --- INICIO DE LA SOLUCIÓN DEFINITIVA ---
-            // Reiniciamos el estado de acción de Throg para que PUEDA realizar la segunda acción.
             if(throg) {
                 throg.hasActed = false;
             }
-            renderUI(); // Actualizamos la UI para que los botones se reactiven.
-            // --- FIN DE LA SOLUCIÓN DEFINITIVA ---
+            renderUI(); 
 
             clearHighlights();
             showTutorialMessage("¡Buen golpe! Acaba con él usando tu habilidad <b>Golpe Poderoso</b> para causar daño extra.");
@@ -1779,7 +1808,6 @@ function checkTutorialStep() {
             break;
     }
 }
-
 function showTutorialMessage(text) {
     const box = document.getElementById('tutorialBox');
     const p = document.getElementById('tutorialText');

@@ -65,22 +65,35 @@ button:disabled {
     width: 100%; 
     height: 100%; 
 }
+/* REEMPLAZAR CON ESTOS NUEVOS ESTILOS */
 .token { 
-    width: 26px; 
-    height: 26px; 
-    border-radius: 9999px; 
-    border: 2px solid rgba(255,255,255,0.8); 
-    display:flex; 
-    align-items:center; 
-    justify-content:center; 
-    font-size: 14px; 
-    font-weight: 700; 
+    width: 30px; /* Un poco más grande para que se vea mejor */
+    height: 30px; 
+    box-sizing: border-box;
+    position: absolute; /* Usamos absolute para centrarlo mejor */
+    top: 1px;
+    left: 1px;
     transition: all 0.2s ease; 
-    position: relative; 
-    z-index: 5; 
+    z-index: 5;
+    
+    /* NUEVO: Estilos para la imagen de fondo */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    
+    /* Opcional: un pequeño borde o sombra para resaltar */
+    border-radius: 4px; /* Un cuadrado con bordes ligeramente redondeados */
+    box-shadow: 0 0 4px rgba(0,0,0,0.8);
 }
-.hero { background:#22c55e; color:#0b210f; }
-.enemy { background:#ef4444; color:#2b0b0b; }
+
+/* Ya no necesitamos colores de fondo, así que eliminamos .hero y .enemy */
+/* Pero mantenemos el borde blanco para los héroes, como un indicador de facción */
+.hero {
+    border: 2px solid rgba(255, 255, 255, 0.9);
+}
+.enemy {
+    border: 2px solid rgba(200, 0, 0, 0.7); /* Borde rojo para enemigos */
+}
 .token.downed { opacity: 0.5; filter: grayscale(1); transform: rotate(-90deg); }
 
 /* Barras de Salud sobre Tokens */
