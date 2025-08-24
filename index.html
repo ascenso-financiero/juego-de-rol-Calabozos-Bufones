@@ -227,5 +227,36 @@
   </template>
 
   <script src="game.js"></script>
+  <!-- MEJORA: Lanzador de Dados 3D -->
+<div id="dice-roller-overlay" class="fixed inset-0 bg-black/80 z-[2200] hidden items-center justify-center flex-col text-white font-title backdrop-blur-sm">
+  <div id="dice-roller-header" class="opacity-0 transition-opacity duration-500">
+    <h2 id="roller-name" class="text-2xl text-amber-300 mb-4"></h2>
+  </div>
+  <div class="dice-container">
+    <div id="dice" class="dice">
+      <!-- Las caras del dado se mantienen igual -->
+      <div class="dice-face front">1</div><div class="dice-face back">20</div><div class="dice-face top">6</div><div class="dice-face bottom">15</div><div class="dice-face right">13</div><div class="dice-face left">8</div>
+    </div>
+  </div>
+  <div id="roll-breakdown" class="mt-8 text-center opacity-0 transition-opacity duration-500 w-full max-w-md">
+    <div class="grid grid-cols-5 items-center text-3xl md:text-5xl gap-2">
+      <div id="roll-base-result" class="text-right font-bold"></div>
+      <div class="text-center text-slate-400 text-2xl md:text-4xl">+</div>
+      <div id="roll-bonus-text" class="text-center font-bold text-sky-400"></div>
+      <div class="text-center text-slate-400 text-2xl md:text-4xl">=</div>
+      <div id="roll-total-result" class="text-left font-bold"></div>
+    </div>
+    <div class="grid grid-cols-5 items-center text-lg md:text-xl text-slate-400">
+      <div class="text-right">Tu Tirada</div><div></div>
+      <div class="text-center">Tu Bonus</div><div></div>
+      <div class="text-left">Total</div>
+    </div>
+    <hr class="border-slate-600 my-4">
+    <div class="text-xl md:text-2xl">vs. Armadura del Objetivo (CA): <span id="roll-target-ac" class="font-bold text-rose-400"></span></div>
+    <div id="roll-final-text" class="text-3xl md:text-4xl font-extrabold mt-3 h-10"></div>
+    <p id="roll-explanation" class="text-sm text-slate-300 mt-2 h-10"></p>
+  </div>
+</div>
+
 </body>
 </html>

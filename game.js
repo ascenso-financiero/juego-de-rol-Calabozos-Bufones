@@ -366,17 +366,21 @@ const soundBank = {
         intervencion_divina: () => { const c = new Tone.Chorus(4, 2.5, 0.5).toDestination().start(); const s = new Tone.PolySynth(Tone.Synth, {oscillator:{type:'fatsawtooth'}}).connect(c); s.triggerAttackRelease(["C4", "E4", "G4"], "1n"); }
     },
     // Efectos Generales
-    effects: {
-        hit: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C3', '8n'),
-        miss: () => new Tone.NoiseSynth({envelope: {attack: 0.005, decay: 0.1, sustain: 0}}).toDestination().triggerAttackRelease("8n"),
-        crit: () => { new Tone.MetalSynth({frequency: 600, harmonicity: 2, modulationIndex: 20}).toDestination().triggerAttackRelease("16n"); },
-        heal: () => new Tone.Synth().toDestination().triggerAttackRelease('E5', '8n'),
-        click: () => new Tone.Synth({oscillator:{type:'square'}, envelope:{attack:0.001, decay:0.05,sustain:0,release:0.1}}).toDestination().triggerAttackRelease('C5', '16n'),
-        levelUp: () => { const s = new Tone.Synth().toDestination(); s.triggerAttackRelease("C5", "8n"); setTimeout(()=>s.triggerAttackRelease("E5", "8n"), 100); setTimeout(()=>s.triggerAttackRelease("G5", "8n"), 200); },
-        death: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C2', '2n'),
-        trap: () => new Tone.MetalSynth({frequency: 200}).toDestination().triggerAttackRelease('8n'),
-        defend: () => new Tone.MetalSynth({envelope: {decay:0.4}}).toDestination().triggerAttackRelease("A3", "8n"),
-    }
+effects: {
+    hit: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C3', '8n'),
+    miss: () => new Tone.NoiseSynth({envelope: {attack: 0.005, decay: 0.1, sustain: 0}}).toDestination().triggerAttackRelease("8n"),
+    crit: () => { new Tone.MetalSynth({frequency: 600, harmonicity: 2, modulationIndex: 20}).toDestination().triggerAttackRelease("16n"); },
+    heal: () => new Tone.Synth().toDestination().triggerAttackRelease('E5', '8n'),
+    click: () => new Tone.Synth({oscillator:{type:'square'}, envelope:{attack:0.001, decay:0.05,sustain:0,release:0.1}}).toDestination().triggerAttackRelease('C5', '16n'),
+    levelUp: () => { const s = new Tone.Synth().toDestination(); s.triggerAttackRelease("C5", "8n"); setTimeout(()=>s.triggerAttackRelease("E5", "8n"), 100); setTimeout(()=>s.triggerAttackRelease("G5", "8n"), 200); },
+    death: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C2', '2n'),
+    trap: () => new Tone.MetalSynth({frequency: 200}).toDestination().triggerAttackRelease('8n'),
+    defend: () => new Tone.MetalSynth({envelope: {decay:0.4}}).toDestination().triggerAttackRelease("A3", "8n"),
+    
+    // --- NUEVOS SONIDOS PARA LOS DADOS ---
+    diceRoll: () => { const n = new Tone.Noise("pink").toDestination().start(); n.volume.value = -20; setTimeout(() => n.stop(), 500); },
+    diceLand: () => new Tone.MembraneSynth({ octaves: 2, pitchDecay: 0.1 }).toDestination().triggerAttackRelease("G1", "8n"),
+}
 };
 
 /**
@@ -400,9 +404,9 @@ async function playSound(type, key, options = {}) {
                 voiceSet['basic_attack'](); // Fallback a ataque básico
             }
         } else if (type === 'effect') {
-            if (soundBank.effects[key]) {
+            if (soundBank.effects[key])
                 soundBank.effects[key]();
-            }
+            
         }
     } catch (error) {
         console.error(`Error al reproducir sonido (${type}, ${key}):`, error);
@@ -1120,7 +1124,7 @@ function setReviveMode(heroId) {
   updateStatusPanel(`${hero.name} va a reanimar a un aliado. Selecciona a un compañero caído adyacente.`);
 }
 
-function performBasicAttack(heroId, enemyId){
+async function performBasicAttack(heroId, enemyId){
   const h = state.heroes.find(x=>x.id===heroId); const e = state.enemies.find(x=>x.id===enemyId); if(!h||!e) return;
 
   h.hasActed = true; h.canUndoMove = false;
@@ -1138,7 +1142,8 @@ function performBasicAttack(heroId, enemyId){
   } else {
       const attackBonus = getAttrMod(h.attrs.STR);
       hit = atkRoll(h, attackBonus, e);
-      showRollResult({ roller: h.name, target: e.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(e), crit: hit.crit, fumble: hit.fumble });
+      await showRollResult({ roller: h.name, target: e.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(e), crit: hit.crit, fumble: hit.fumble });
+
   }
 
   if(hit.fumble){
@@ -1429,7 +1434,7 @@ function enemyAI(enemyId){
   }, 700);
 }
 
-function performAIAttack(e, target) {
+async function performAIAttack(e, target) {
     const special = ENEMY_SPECIAL_ABILITIES[e.special];
     if (special && special.execute(e, target)) {
         // Special executed
@@ -1437,7 +1442,8 @@ function performAIAttack(e, target) {
         if(e.isInvulnerable) { log(`${e.name} es invulnerable y se regodea.`); }
         else {
             let hit = atkRoll(e, e.attack, target);
-            showRollResult({ roller: e.name, target: target.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(target), crit: hit.crit, fumble: hit.fumble });
+            await showRollResult({ roller: e.name, target: target.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(target), crit: hit.crit, fumble: hit.fumble });
+
     if(hit.crit){
         playSound('effect', 'crit');
         let d = rollDamage(e.dmg, e) * 2;
@@ -1504,7 +1510,7 @@ function checkBossMechanics(boss) {
       }
   }
 
-  function performAbility(actorId, targetId, ability) {
+async function performAbility(actorId, targetId, ability) {
       const actor = state.heroes.find(h => h.id === actorId);
       const target = state.heroes.find(h => h.id === targetId) || state.enemies.find(e => e.id === targetId);
       if (!actor || !target) return;
@@ -1523,7 +1529,8 @@ function checkBossMechanics(boss) {
               if (actor.cls === 'GUERRERO') { actor.res = Math.min(actor.resmax, actor.res + 1); log(`${actor.name} gana 1 de Furia!`, 'info'); }
               const hit = atkRoll(actor, getAttrMod(actor.attrs.STR), target);
               success = hit.total >= effectiveAC(target);
-              showRollResult({ roller: actor.name, target: target.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(target), crit: hit.crit, fumble: hit.fumble });
+              await showRollResult({ roller: actor.name, target: target.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(target), crit: hit.crit, fumble: hit.fumble });
+
               if (success) {
                   let totalDmg = rollDamage("1d8", actor) + bonus + (ability.opts.extraDamage || 0);
                   if (ability.opts.requireAllyAdj) {
@@ -2150,36 +2157,98 @@ function showKillCam(hero, onCompleteCallback) {
 }
 
 function showRollResult(data) {
-  const visualizer = document.getElementById('roll-visualizer');
-  const { roller, roll, bonus, total, targetAC, crit, fumble } = data;
-  let rollClass = '', resultClass = '', resultText = '';
+  // Devolvemos una Promesa para que el juego espere a que la animación termine
+  return new Promise(resolve => {
+    const { roller, roll, bonus, total, targetAC, crit, fumble } = data;
 
-  if (crit) { rollClass = 'roll-crit'; resultClass = 'roll-success'; resultText = '¡CRÍTICO!'; }
-  else if (fumble) { rollClass = 'roll-fumble'; resultClass = 'roll-fail'; resultText = '¡PIFIA!'; }
-  else if (total >= targetAC) { resultClass = 'roll-success'; resultText = '¡Impacto!'; }
-  else { resultClass = 'roll-fail'; resultText = 'Fallo'; }
+    // Elementos del lanzador de dados
+    const overlay = document.getElementById('dice-roller-overlay');
+    const headerEl = document.getElementById('dice-roller-header');
+    const diceEl = document.getElementById('dice');
+    const breakdownEl = document.getElementById('roll-breakdown');
+    const rollerNameEl = document.getElementById('roller-name');
+    const baseResultEl = document.getElementById('roll-base-result');
+    const bonusTextEl = document.getElementById('roll-bonus-text');
+    const totalResultEl = document.getElementById('roll-total-result');
+    const targetAcEl = document.getElementById('roll-target-ac');
+    const finalTextEl = document.getElementById('roll-final-text');
+    const explanationEl = document.getElementById('roll-explanation');
 
-  visualizer.innerHTML = `
-      <div class="text-lg">${roller} ataca...</div>
-      <div class="text-4xl my-2">
-          <span class="${rollClass}">${roll}</span>
-          <span class="text-2xl text-slate-400"> ${bonus >= 0 ? '+' : ''} ${bonus} = </span>
-          <span class="font-bold">${total}</span>
-      </div>
-      <div class="text-sm text-slate-300">vs CA ${targetAC}</div>
-      <div class="text-xl mt-2 ${resultClass}">${resultText}</div>
-  `;
+    // Resetear estado
+    headerEl.style.opacity = '0';
+    breakdownEl.style.opacity = '0';
+    baseResultEl.className = totalResultEl.className = finalTextEl.className = '';
+    finalTextEl.textContent = '';
+    explanationEl.textContent = '';
 
-  state.isAnimating = true;
-  visualizer.style.display = 'block';
-  setTimeout(() => visualizer.style.opacity = '1', 10);
-  setTimeout(() => {
-      visualizer.style.opacity = '0';
+    // Mostrar overlay e iniciar animación
+    overlay.style.display = 'flex';
+    rollerNameEl.textContent = `${roller} ataca...`;
+    headerEl.style.opacity = '1';
+    diceEl.classList.add('rolling');
+    playSound('effect', 'diceRoll');
+
+    // Simular el rodar cambiando los números rápidamente
+    const faces = diceEl.querySelectorAll('.dice-face');
+    const interval = setInterval(() => {
+      faces.forEach(face => face.textContent = dice.d(20));
+    }, 80);
+
+    // Detener la animación después de un tiempo
+    setTimeout(() => {
+      clearInterval(interval);
+      diceEl.classList.remove('rolling');
+      playSound('effect', 'diceLand');
+      
+      // Asignar el resultado final
+      faces[0].textContent = roll;
+
+      // Poblar el desglose de números
+      baseResultEl.textContent = roll;
+      bonusTextEl.textContent = bonus;
+      totalResultEl.textContent = total;
+      targetAcEl.textContent = targetAC;
+      
+      // Preparar texto de resultado y explicación
+      let resultText = '';
+      let explanationText = '';
+      const bonusString = `tu bonus de habilidad (${bonus >= 0 ? '+' : ''}${bonus})`;
+
+      if (crit) {
+        baseResultEl.classList.add('crit');
+        finalTextEl.classList.add('crit');
+        resultText = '¡CRÍTICO!';
+        explanationText = `¡Un 20 natural! Es un golpe devastador garantizado.`;
+      } else if (fumble) {
+        baseResultEl.classList.add('fumble');
+        finalTextEl.classList.add('fumble');
+        resultText = '¡PIFIA!';
+        explanationText = `Un 1 natural siempre es un fallo garrafal, sin importar tus bonus.`;
+      } else if (total >= targetAC) {
+        finalTextEl.classList.add('success');
+        resultText = '¡Impacto!';
+        explanationText = `Tu total (${total}) igualó o superó la armadura del enemigo (${targetAC}).`;
+      } else {
+        finalTextEl.classList.add('fail');
+        resultText = 'Fallo';
+        explanationText = `Tu total (${total}) no fue suficiente para superar la armadura del enemigo (${targetAC}).`;
+      }
+      
+      finalTextEl.textContent = resultText;
+      explanationEl.textContent = explanationText;
+
+      // Mostrar el desglose
+      breakdownEl.style.opacity = '1';
+
+      // Ocultar todo y resolver la promesa después de una pausa final
       setTimeout(() => {
-          visualizer.style.display = 'none';
-          state.isAnimating = false;
-      }, 300);
-  }, 2000);
+        overlay.style.display = 'none';
+        headerEl.style.opacity = '0'; // Resetear para la próxima vez
+        resolve(); // Avisa al juego que la animación ha terminado
+      }, 3500); // Aumentamos un poco el tiempo para que se pueda leer
+
+    }, 1500);
+  });
 }
 
 function advanceTutorial(action) {

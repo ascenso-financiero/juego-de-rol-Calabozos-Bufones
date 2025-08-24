@@ -404,3 +404,69 @@ button:disabled {
     transform: translate(-50%, -50%);
     text-shadow: 0 0 4px black;
 }
+
+/* ==========================================================================
+   MEJORA: Lanzador de Dados 3D
+   ========================================================================== */
+.dice-container {
+    width: 100px;
+    height: 100px;
+    perspective: 1000px;
+}
+
+.dice {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 1.5s cubic-bezier(.45,-0.02,.33,1.26); /* Transición suave al resultado */
+}
+
+.dice-face {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    background: #1e293b;
+    border: 2px solid #475569;
+    color: #cbd5e1;
+    font-size: 48px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+
+/* Posicionamiento de las caras del cubo */
+.dice-face.front  { transform: rotateY(0deg) translateZ(50px); }
+.dice-face.back   { transform: rotateY(180deg) translateZ(50px); }
+.dice-face.right  { transform: rotateY(90deg) translateZ(50px); }
+.dice-face.left   { transform: rotateY(-90deg) translateZ(50px); }
+.dice-face.top    { transform: rotateX(90deg) translateZ(50px); }
+.dice-face.bottom { transform: rotateX(-90deg) translateZ(50px); }
+
+/* Animación de rodar */
+.dice.rolling {
+    animation: roll-animation 0.2s infinite;
+}
+
+@keyframes roll-animation {
+    0% { transform: rotateX(0deg) rotateY(0deg); }
+    100% { transform: rotateX(360deg) rotateY(360deg); }
+}
+
+/* Clases para resultados especiales */
+#roll-base-result.crit, #roll-final-text.crit {
+    color: #f59e0b;
+    text-shadow: 0 0 10px #f59e0b;
+}
+#roll-base-result.fumble, #roll-final-text.fumble {
+    color: #ef4444;
+    text-shadow: 0 0 10px #ef4444;
+}
+#roll-final-text.success {
+    color: #22c55e;
+}
+#roll-final-text.fail {
+    color: #9ca3af;
+}
