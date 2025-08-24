@@ -6,6 +6,7 @@ const dice = { d: (sides) => RNG(sides)+1 };
 const XP_TABLE = [0, 100, 300, 600, 1000, 1500, 2200, 3000, 4000, 5200];
 
 const STATUS_ICONS = {
+  cover: { icon: '🧱', title: 'A cubierto (-2 a la tirada de ataque contra él)' },
   defending: { icon: '🛡️', title: 'Defendiendo (+4 CA)' },
   stun: { icon: '💫', title: 'Aturdido (No puede actuar)' },
   confused: { icon: '❓', title: 'Confuso' },
@@ -164,70 +165,156 @@ const ATTRIBUTE_TIPS = {
   CHA: "Carisma (CHA): ¡Para verse fabuloso mientras se combate!"
 };
 
-const sounds = {
-  characterVoices: {
-      GUERRERO: {
-          basic_attack: () => new Tone.PluckSynth({attackNoise: 1, dampening: 8000, resonance: 0.7}).triggerAttack("C2"),
-          hurt: () => new Tone.MembraneSynth({pitchDecay: 0.1, octaves: 4}).triggerAttackRelease("A1", "8n"),
-          golpe_poder: () => new Tone.MetalSynth({frequency: 150, harmonicity: 2, modulationIndex: 15}).triggerAttackRelease("8n"),
-          inmortal: () => { const n = new Tone.Noise("white").start(); const f = new Tone.AutoFilter("2n").toDestination().start(); n.connect(f); setTimeout(() => { n.stop(); f.stop(); }, 800); }
-      },
-      MAGO: {
-          basic_attack: () => new Tone.Synth({oscillator: {type: 'triangle8'}}).toDestination().triggerAttackRelease("G4", "16n"),
-          hurt: () => new Tone.Synth({oscillator: {type: "triangle"}}).toDestination().triggerAttackRelease("A4", "16n"),
-          misil_magico: () => new Tone.FMSynth({harmonicity: 3, modulationIndex: 10, oscillator: {type: "sine"}}).toDestination().triggerAttackRelease("C5", "4n"),
-          tormenta_sarcasmo: () => new Tone.NoiseSynth({noise: {type: "pink"}, envelope: {attack: 0.005, decay: 0.5, sustain: 0}}).toDestination().triggerAttackRelease("1n")
-      },
-      PICARO: {
-          basic_attack: () => { const s = new Tone.Synth({oscillator: {type: 'sawtooth'}, envelope: {attack: 0.001, decay: 0.05, sustain: 0, release: 0.1}}).toDestination(); s.triggerAttackRelease('G#4', '16n'); setTimeout(() => s.triggerAttackRelease('A4', '16n'), 50); },
-          hurt: () => new Tone.Synth({oscillator: {type: "square"}}).toDestination().triggerAttackRelease("C4", "16n"),
-          ataque_furtivo: () => { const s = new Tone.Synth({volume: -10, oscillator: {type: 'triangle'}, envelope: {attack: 0.001, decay: 0.02, sustain: 0, release: 0.1}}).toDestination(); s.triggerAttackRelease('C5', '32n'); setTimeout(() => s.triggerAttackRelease('G5', '32n'), 30); },
-          bolsillos_ajenos: () => new Tone.PluckSynth({resonance: 0.9}).toDestination().triggerAttack("A5")
-      },
-      CLERIGO: {
-          basic_attack: () => new Tone.MetalSynth({frequency: 400, envelope: {attack: 0.001, decay: 0.2, release: 0.1}}).toDestination().triggerAttackRelease("8n"),
-          hurt: () => new Tone.MembraneSynth({pitchDecay: 0.2, octaves: 2}).triggerAttackRelease("D2", "8n"),
-          curar: () => { const s = new Tone.Synth({oscillator:{type:'sine'}}).toDestination(); s.triggerAttackRelease("E5", "8n"); setTimeout(() => s.triggerAttackRelease("G5", "8n"), 120); },
-          intervencion_divina: () => { const c = new Tone.Chorus(4, 2.5, 0.5).toDestination().start(); const s = new Tone.PolySynth(Tone.Synth, {oscillator:{type:'fatsawtooth'}}).connect(c); s.triggerAttackRelease(["C4", "E4", "G4"], "1n"); }
-      }
-  },
-  playVoice: (char, actionKey) => {
-      if (Tone.context.state !== 'running') { Tone.context.resume(); }
-      const voiceSet = sounds.characterVoices[char.cls];
-      if (voiceSet && voiceSet[actionKey]) voiceSet[actionKey]();
-      else if (voiceSet && voiceSet['basic_attack']) voiceSet['basic_attack']();
-  },
-  effects: {
-    hit: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C3', '8n'),
-    miss: () => new Tone.NoiseSynth({envelope: {attack: 0.005, decay: 0.1, sustain: 0}}).toDestination().triggerAttackRelease("8n"),
-    crit: () => { new Tone.MetalSynth({frequency: 600, harmonicity: 2, modulationIndex: 20}).toDestination().triggerAttackRelease("16n"); },
-    heal: () => new Tone.Synth().toDestination().triggerAttackRelease('E5', '8n'),
-    click: () => new Tone.Synth({oscillator:{type:'square'}, envelope:{attack:0.001, decay:0.05,sustain:0,release:0.1}}).toDestination().triggerAttackRelease('C5', '16n'),
-    levelUp: () => { const s = new Tone.Synth().toDestination(); s.triggerAttackRelease("C5", "8n"); setTimeout(()=>s.triggerAttackRelease("E5", "8n"), 100); setTimeout(()=>s.triggerAttackRelease("G5", "8n"), 200); },
-    death: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C2', '2n'),
-    trap: () => new Tone.MetalSynth({frequency: 200}).toDestination().triggerAttackRelease('8n'),
-    defend: () => new Tone.MetalSynth({envelope: {decay:0.4}}).toDestination().triggerAttackRelease("A3", "8n"),
-  }
+const soundBank = {
+    // Voces de Personajes
+    GUERRERO: {
+        basic_attack: () => new Tone.PluckSynth({attackNoise: 1, dampening: 8000, resonance: 0.7}).triggerAttack("C2"),
+        hurt: () => new Tone.MembraneSynth({pitchDecay: 0.1, octaves: 4}).triggerAttackRelease("A1", "8n"),
+        golpe_poder: () => new Tone.MetalSynth({frequency: 150, harmonicity: 2, modulationIndex: 15}).triggerAttackRelease("8n"),
+        inmortal: () => { const n = new Tone.Noise("white").start(); const f = new Tone.AutoFilter("2n").toDestination().start(); n.connect(f); setTimeout(() => { n.stop(); f.stop(); }, 800); }
+    },
+    MAGO: {
+        basic_attack: () => new Tone.Synth({oscillator: {type: 'triangle8'}}).toDestination().triggerAttackRelease("G4", "16n"),
+        hurt: () => new Tone.Synth({oscillator: {type: "triangle"}}).toDestination().triggerAttackRelease("A4", "16n"),
+        misil_magico: () => new Tone.FMSynth({harmonicity: 3, modulationIndex: 10, oscillator: {type: "sine"}}).toDestination().triggerAttackRelease("C5", "4n"),
+        tormenta_sarcasmo: () => new Tone.NoiseSynth({noise: {type: "pink"}, envelope: {attack: 0.005, decay: 0.5, sustain: 0}}).toDestination().triggerAttackRelease("1n")
+    },
+    PICARO: {
+        basic_attack: () => { const s = new Tone.Synth({oscillator: {type: 'sawtooth'}, envelope: {attack: 0.001, decay: 0.05, sustain: 0, release: 0.1}}).toDestination(); s.triggerAttackRelease('G#4', '16n'); setTimeout(() => s.triggerAttackRelease('A4', '16n'), 50); },
+        hurt: () => new Tone.Synth({oscillator: {type: "square"}}).toDestination().triggerAttackRelease("C4", "16n"),
+        ataque_furtivo: () => { const s = new Tone.Synth({volume: -10, oscillator: {type: 'triangle'}, envelope: {attack: 0.001, decay: 0.02, sustain: 0, release: 0.1}}).toDestination(); s.triggerAttackRelease('C5', '32n'); setTimeout(() => s.triggerAttackRelease('G5', '32n'), 30); },
+        bolsillos_ajenos: () => new Tone.PluckSynth({resonance: 0.9}).toDestination().triggerAttack("A5")
+    },
+    CLERIGO: {
+        basic_attack: () => new Tone.MetalSynth({frequency: 400, envelope: {attack: 0.001, decay: 0.2, release: 0.1}}).toDestination().triggerAttackRelease("8n"),
+        hurt: () => new Tone.MembraneSynth({pitchDecay: 0.2, octaves: 2}).triggerAttackRelease("D2", "8n"),
+        curar: () => { const s = new Tone.Synth({oscillator:{type:'sine'}}).toDestination(); s.triggerAttackRelease("E5", "8n"); setTimeout(() => s.triggerAttackRelease("G5", "8n"), 120); },
+        intervencion_divina: () => { const c = new Tone.Chorus(4, 2.5, 0.5).toDestination().start(); const s = new Tone.PolySynth(Tone.Synth, {oscillator:{type:'fatsawtooth'}}).connect(c); s.triggerAttackRelease(["C4", "E4", "G4"], "1n"); }
+    },
+    // Efectos Generales
+    effects: {
+        hit: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C3', '8n'),
+        miss: () => new Tone.NoiseSynth({envelope: {attack: 0.005, decay: 0.1, sustain: 0}}).toDestination().triggerAttackRelease("8n"),
+        crit: () => { new Tone.MetalSynth({frequency: 600, harmonicity: 2, modulationIndex: 20}).toDestination().triggerAttackRelease("16n"); },
+        heal: () => new Tone.Synth().toDestination().triggerAttackRelease('E5', '8n'),
+        click: () => new Tone.Synth({oscillator:{type:'square'}, envelope:{attack:0.001, decay:0.05,sustain:0,release:0.1}}).toDestination().triggerAttackRelease('C5', '16n'),
+        levelUp: () => { const s = new Tone.Synth().toDestination(); s.triggerAttackRelease("C5", "8n"); setTimeout(()=>s.triggerAttackRelease("E5", "8n"), 100); setTimeout(()=>s.triggerAttackRelease("G5", "8n"), 200); },
+        death: () => new Tone.MembraneSynth().toDestination().triggerAttackRelease('C2', '2n'),
+        trap: () => new Tone.MetalSynth({frequency: 200}).toDestination().triggerAttackRelease('8n'),
+        defend: () => new Tone.MetalSynth({envelope: {decay:0.4}}).toDestination().triggerAttackRelease("A3", "8n"),
+    }
 };
 
-let bsoAudio = null; let isMusicPlaying = false;
-function toggleMusic() { if (!bsoAudio) { playBSO(state.currentAct); return; } if (isMusicPlaying) { bsoAudio.pause(); document.getElementById('toggleMusic').textContent = '🔇'; } else { bsoAudio.play(); document.getElementById('toggleMusic').textContent = '🎵'; } isMusicPlaying = !isMusicPlaying; }
-function playBSO(actIndex) { 
-  if (bsoAudio) { bsoAudio.pause(); bsoAudio = null; } 
-  const bsoFiles = ['bso/act1.ogg', 'bso/act2.ogg', 'bso/act3.ogg', 'bso/act4.ogg']; 
-  const bsoFile = bsoFiles[actIndex]; 
-  log(`INFO: La música de fondo está desactivada para evitar errores de carga local.`, 'info'); 
-  bsoAudio = new Audio(); bsoAudio.src = bsoFile; bsoAudio.loop = true; bsoAudio.volume = 0.35; 
+/**
+ * Función maestra para reproducir todos los sonidos.
+ * Se asegura de que el contexto de audio de Tone.js esté activo antes de reproducir.
+ * @param {string} type - 'voice' o 'effect'
+ * @param {string} key - La clave del sonido a reproducir (ej. 'click', 'hit')
+ * @param {object} [options] - Opciones adicionales, para voces se necesita `char`
+ */
+async function playSound(type, key, options = {}) {
+    if (Tone.context.state !== 'running') {
+        await Tone.context.resume();
+    }
+
+    try {
+        if (type === 'voice') {
+            const voiceSet = soundBank[options.char.cls];
+            if (voiceSet && voiceSet[key]) {
+                voiceSet[key]();
+            } else if (voiceSet && voiceSet['basic_attack']) {
+                voiceSet['basic_attack'](); // Fallback a ataque básico
+            }
+        } else if (type === 'effect') {
+            if (soundBank.effects[key]) {
+                soundBank.effects[key]();
+            }
+        }
+    } catch (error) {
+        console.error(`Error al reproducir sonido (${type}, ${key}):`, error);
+    }
+}
+
+let bsoAudio = null;
+let isMusicPlaying = false;
+
+async function playMusic(actIndex) {
+    // Detiene la música anterior si existe
+    if (bsoAudio) {
+        bsoAudio.pause();
+        bsoAudio = null;
+    }
+    
+    // Asegura que el contexto de audio general esté activo
+    if (Tone.context.state !== 'running') {
+        await Tone.context.resume();
+    }
+
+    const bsoFiles = ['bso/act1.ogg', 'bso/act2.ogg', 'bso/act3.ogg', 'bso/act4.ogg'];
+    if (actIndex >= bsoFiles.length) return; // No hay música para este acto
+
+    const bsoFile = bsoFiles[actIndex];
+    bsoAudio = new Audio(bsoFile);
+    bsoAudio.loop = true;
+    bsoAudio.volume = 0.35;
+    
+    try {
+        await bsoAudio.play();
+        isMusicPlaying = true;
+        document.getElementById('toggleMusic').textContent = '🎵';
+    } catch (error) {
+        console.error("Error al reproducir la música de fondo. Es posible que el navegador lo haya bloqueado. Se requiere interacción del usuario.", error);
+        isMusicPlaying = false;
+        document.getElementById('toggleMusic').textContent = '🔇';
+    }
+}
+
+async function toggleMusic() {
+    if (!bsoAudio) {
+        playMusic(state.currentAct);
+        return;
+    }
+
+    if (isMusicPlaying) {
+        bsoAudio.pause();
+        document.getElementById('toggleMusic').textContent = '🔇';
+    } else {
+        // Asegura que el contexto de audio esté activo antes de reanudar
+        if (Tone.context.state !== 'running') {
+            await Tone.context.resume();
+        }
+        try {
+            await bsoAudio.play();
+            document.getElementById('toggleMusic').textContent = '🎵';
+        } catch (error) {
+            console.error("Error al reanudar la música:", error);
+        }
+    }
+    isMusicPlaying = !isMusicPlaying;
 }
 
 function id() { return state.nextId++; }
+const LOG_ICONS = {
+    damage: '⚔️',
+    heal: '➕',
+    crit: '💥',
+    info: 'ℹ️',
+    game: '🎲'
+};
+
 function log(msg, type = 'default'){
     const el = document.getElementById('log');
     const line = document.createElement('div');
     line.className = `log-line log-${type}`;
+    
     const isCombat = state.initOrder.length > 0;
     const roundPrefix = isCombat ? `<span class="text-slate-500 mr-1">R${state.round}:</span>` : '';
-    line.innerHTML = roundPrefix + msg;
+    
+    // Añade el icono si el tipo existe en nuestro mapa de iconos
+    const icon = LOG_ICONS[type] ? `<span class="log-icon">${LOG_ICONS[type]}</span>` : '';
+    
+    line.innerHTML = roundPrefix + icon + msg;
+    
     if (el.firstChild) {
         el.firstChild.style.opacity = '0.7';
         el.firstChild.style.fontWeight = 'normal';
@@ -235,6 +322,7 @@ function log(msg, type = 'default'){
     el.prepend(line);
     el.scrollTop = 0;
 }
+
 function showFloatingText(x, y, text, color) { const c = document.getElementById('floatingTextContainer'); const e = document.createElement('div'); e.className = 'floating-text'; e.textContent = text; e.style.color = color; e.style.left = `${x * 32 + 16}px`; e.style.top = `${y * 32}px`; c.appendChild(e); setTimeout(() => e.remove(), 1500); }
 function inBounds(x,y){ return x>=0 && y>=0 && x<state.gridW && y<state.gridH; }
 function cellAt(x,y){ if (!inBounds(x,y)) return null; return state.map[y*state.gridW + x]; }
@@ -277,6 +365,38 @@ function hasCover(attacker, target) {
     return false;
 }
 
+function rollDamage(dmgString) {
+    // Si no hay string de daño, devuelve un valor bajo por defecto para evitar errores.
+    if (!dmgString || typeof dmgString !== 'string' || dmgString === "0") return 0;
+
+    const parts = dmgString.split('+');
+    let totalDamage = 0;
+    
+    // Parte de los dados (ej: "2d8")
+    const dicePart = parts[0];
+    const diceInfo = dicePart.split('d');
+    
+    if (diceInfo.length !== 2) {
+        console.error(`Formato de dado inválido en rollDamage: ${dicePart}`);
+        return 1; // Devuelve un daño mínimo si hay un error de formato
+    }
+
+    const numDice = parseInt(diceInfo[0]);
+    const sides = parseInt(diceInfo[1]);
+
+    for (let i = 0; i < numDice; i++) {
+        totalDamage += dice.d(sides);
+    }
+
+    // Parte del bonus (ej: 3)
+    if (parts.length > 1) {
+        const bonusPart = parseInt(parts[1]);
+        totalDamage += bonusPart;
+    }
+
+    return totalDamage;
+}
+
 function setupAct(actIndex) {
   state.currentAct = actIndex;
   const act = CAMPAIGN_ACTS[actIndex];
@@ -287,7 +407,7 @@ function setupAct(actIndex) {
   document.getElementById('missionDescription').textContent = act.missionDesc;
   document.getElementById('missionObjective').textContent = `Objetivo: ${act.missionObj}`;
   state.dungeonLevel = 0; state.bossSpawned = false;
-  playBSO(state.currentAct); 
+  playMusic(state.currentAct); 
   
   if(state.tutorial.active && state.tutorial.step < 3) {
     generateTutorialDungeon();
@@ -441,6 +561,11 @@ function renderMap(){
           const tokenEl = document.createElement('div');
           const isHero = !!characterOnCell.cls;
           tokenEl.className = `token ${isHero ? 'hero' : 'enemy'}`;
+          const isCurrentTurn = state.initOrder[state.turnIndex]?.id === characterOnCell.id;
+          if (isCurrentTurn) {
+             tokenEl.classList.add('active-turn-indicator');
+          }
+
           tokenEl.dataset.id = characterOnCell.id;
           
           let imageUrl = '';
@@ -491,6 +616,12 @@ function renderMap(){
       }
 
       if (characterOnCell) {
+          const tokenEl = tokenContainer.querySelector('.token');
+          if (tokenEl) {
+              const isCurrentTurn = state.initOrder[state.turnIndex]?.id === characterOnCell.id;
+              tokenEl.classList.toggle('active-turn-indicator', isCurrentTurn);
+          }
+
           const hpFill = tokenContainer.querySelector('.token-hp-bar-fill');
           if(hpFill) hpFill.style.width = `${(characterOnCell.hp / characterOnCell.hpmax) * 100}%`;
 
@@ -636,7 +767,8 @@ function addHero(name, clsKey){
 }
 
 function levelUp(hero){
-  hero.level++; sounds.effects.levelUp();
+  hero.level++; 
+  playSound('effect', 'levelUp');
   log(`<b>¡${hero.name} sube a nivel ${hero.level}! ¡Más poder para más caos!</b>`, 'game');
   hero.hpmax += dice.d(6) + getAttrMod(hero.attrs.CON);
   hero.hp = hero.hpmax; hero.resmax += 1; hero.res = hero.resmax;
@@ -674,7 +806,9 @@ function spawnEnemyAt(x,y, kind, tier){ const e = scaleEnemy(kind, tier); e.pos=
 }
 
 function killEnemy(e, killerHero){
-  log(`<b>${e.name}</b> ha sido derrotado.`, 'damage'); sounds.effects.death(); showDeathEffect(e.pos.x, e.pos.y);
+  log(`<b>${e.name}</b> ha sido derrotado.`, 'damage'); 
+  playSound('effect', 'death');
+  showDeathEffect(e.pos.x, e.pos.y);
   state.enemies = state.enemies.filter(x=>x.id!==e.id);
   state.heroes.forEach(h => { if(h.hp > 0) { h.xp += e.xp; log(`${h.name} gana ${e.xp} XP.`, 'info'); if(h.xp >= XP_TABLE[h.level]) levelUp(h); } });
   
@@ -689,32 +823,39 @@ function killEnemy(e, killerHero){
       state.turnIndex = state.initOrder.length - 1;
   }
   
-  if (e.tier === 'boss' && killerHero) {
-      showKillCam(killerHero);
-  }
-
-  if (state.enemies.length === 0 && state.initOrder.length > 0) {
-      log('<b>¡El último enemigo ha caído!</b> El combate ha terminado.', 'game');
-      state.heroes.forEach(h => { if(h.cls === 'GUERRERO') h.usedInmortalThisCombat = false; });
-      state.initOrder = [];
-      state.initialInitiative = [];
-      state.turnIndex = -1;
-      state.round = 0;
-      updateStatusPanel('Explora la mazmorra. Pulsa "Siguiente Turno" para avanzar.');
-      document.getElementById('currentTurn').textContent = '—';
-      renderInitiative();
-  }
-
-  const act = CAMPAIGN_ACTS[state.currentAct];
-  if (act && e.kind === act.boss) { log(`<b>¡Has derrotado a ${e.name} y completado el ${act.title}!</b>`, 'game'); setTimeout(() => setupAct(state.currentAct + 1), 3000); }
-  renderUI();
+  const finishKillEnemy = () => {
+    if (state.enemies.length === 0 && state.initOrder.length > 0) {
+        log('<b>¡El último enemigo ha caído!</b> El combate ha terminado.', 'game');
+        state.heroes.forEach(h => { if(h.cls === 'GUERRERO') h.usedInmortalThisCombat = false; });
+        state.initOrder = [];
+        state.initialInitiative = [];
+        state.turnIndex = -1;
+        state.round = 0;
+        updateStatusPanel('Explora la mazmorra. Pulsa "Siguiente Turno" para avanzar.');
+        document.getElementById('currentTurn').textContent = '—';
+        renderInitiative();
+    }
   
-  advanceTutorial({ type: 'enemy_killed', enemy: e });
+    const act = CAMPAIGN_ACTS[state.currentAct];
+    if (act && e.kind === act.boss) {
+        log(`<b>¡Has derrotado a ${e.name} y completado el ${act.title}!</b>`, 'game');
+        setTimeout(() => setupAct(state.currentAct + 1), 3000);
+    }
+    renderUI();
+    
+    advanceTutorial({ type: 'enemy_killed', enemy: e });
+  };
+
+  if (e.tier === 'boss' && killerHero) {
+      showKillCam(killerHero, finishKillEnemy);
+  } else {
+      finishKillEnemy();
+  }
 }
 
 function setMoveMode(heroId) {
   if (state.isAnimating) return;
-  sounds.effects.click();
+  playSound('effect', 'click');
   const hero = state.heroes.find(h => h.id === heroId);
   if (!hero || hero.hp <= 0 || hero.hasMoved) return;
   const isCombat = state.initOrder.length > 0;
@@ -738,7 +879,7 @@ function setMoveMode(heroId) {
 
 function setAttackMode(heroId){
   if (state.isAnimating) return;
-  sounds.effects.click();
+  playSound('effect', 'click');
   const hero = state.heroes.find(x=>x.id===heroId);
   if(!hero || hero.hp <= 0) return;
   let canAct = false;
@@ -757,7 +898,7 @@ function setAttackMode(heroId){
 
 function setReviveMode(heroId) {
   if (state.isAnimating) return;
-  sounds.effects.click();
+  playSound('effect', 'click');
   const hero = state.heroes.find(h => h.id === heroId);
   if (!hero || hero.hp <= 0) return;
   let canAct = false;
@@ -780,7 +921,7 @@ function performBasicAttack(heroId, enemyId){
   const h = state.heroes.find(x=>x.id===heroId); const e = state.enemies.find(x=>x.id===enemyId); if(!h||!e) return;
   
   h.hasActed = true; h.canUndoMove = false;
-  sounds.playVoice(h, 'basic_attack');
+  playSound('voice', 'basic_attack', { char: h });
   
   if (h.cls === 'GUERRERO') { h.res = Math.min(h.resmax, h.res + 1); log(`${h.name} gana 1 de Furia!`, 'info'); }
   if (e.isInvulnerable) { log(`<b>${e.name}</b> es invulnerable a los ataques!`, 'info'); renderUI(); return; }
@@ -790,28 +931,37 @@ function performBasicAttack(heroId, enemyId){
 
   showRollResult({ roller: h.name, target: e.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(e), crit: hit.crit, fumble: hit.fumble });
   
-  if(hit.fumble){ sounds.effects.miss(); log(`${h.name} pifia estrepitosamente.`, 'damage'); }
+  if(hit.fumble){ 
+    playSound('effect', 'miss');
+    log(`${h.name} pifia estrepitosamente.`, 'damage'); 
+  }
   else if(hit.crit){ 
-      sounds.effects.crit(); 
+      playSound('effect', 'crit');
       const dmg = (dice.d(8) + getDamageBonus(h)) * 2; 
       e.hp -= dmg; 
       log(`<b>${h.name}</b> CRÍTICO (${hit.total}) a ${e.name}: ${dmg} daño!`, 'crit'); 
       showFloatingText(e.pos.x, e.pos.y, dmg, '#f59e0b'); 
-      showDamageEffect(e.pos.x, e.pos.y, '#f59e0b', e, true); 
+      showDamageEffect(e.pos.x, e.pos.y, '#f59e0b', e, true);
+      playEffect(e.pos.x, e.pos.y, 'physical-hit');
   }
   else if(hit.total >= effectiveAC(e)){ 
-      sounds.effects.hit(); 
+      playSound('effect', 'hit');
       const dmg = dice.d(8) + getDamageBonus(h); 
       e.hp -= dmg; 
       log(`${h.name} impacta (${hit.total}) a ${e.name}: ${dmg} daño.`, 'damage'); 
       showFloatingText(e.pos.x, e.pos.y, dmg, '#ffffff'); 
-      showDamageEffect(e.pos.x, e.pos.y, '#ffffff', e); 
+      showDamageEffect(e.pos.x, e.pos.y, '#ffffff', e);
+      playEffect(e.pos.x, e.pos.y, 'physical-hit');
   }
-  else { sounds.effects.miss(); log(`${h.name} falla (${hit.total}).`); showFloatingText(e.pos.x, e.pos.y, 'Falla', '#9ca3af'); }
+  else { 
+    playSound('effect', 'miss');
+    log(`${h.name} falla (${hit.total}).`, 'info'); 
+    showFloatingText(e.pos.x, e.pos.y, 'Falla', '#9ca3af'); 
+  }
   
   if (e.hp <= 0) killEnemy(e, h); else checkBossMechanics(e);
   state.mode = { type: 'none' }; clearHighlights(); renderUI();
-  advanceTutorial({ type: 'attack', success: hit.total >= effectiveAC(e) });
+  advanceTutorial({ type: 'attack', success: hit.total >= effectiveAC(e), ability: { key: 'basic_attack' } });
 }
 
 function defendAction(heroId) {
@@ -826,9 +976,10 @@ function defendAction(heroId) {
   if(!canAct) return;
 
   hero.hasActed = true; hero.canUndoMove = false;
-  sounds.effects.defend();
+  playSound('effect', 'defend');
   hero.buffs.push({ key: 'defending', ac: 4, rounds: 2, desc: '+4 a la CA' });
   log(`<b>${hero.name}</b> adopta una postura defensiva.`, 'info');
+  playEffect(hero.pos.x, hero.pos.y, 'buff');
   renderUI();
 }
 
@@ -846,7 +997,7 @@ function undoMove(heroId) {
 
 function useAbility(heroId, key){
   if (state.isAnimating) return;
-  sounds.effects.click();
+  playSound('effect', 'click');
   const h = state.heroes.find(x=>x.id===heroId); if(!h) return;
   
   let canAct = false;
@@ -859,7 +1010,7 @@ function useAbility(heroId, key){
   if(!ability){ log('Habilidad no encontrada.', 'info'); return; }
   if(h.res < (ability.cost||0)){ log('No tienes recursos suficientes.', 'info'); return; }
   
-  sounds.playVoice(h, key);
+  playSound('voice', key, { char: h });
   
   if (ability.range === 0) {
       ability.use({ self: h, ability });
@@ -1046,22 +1197,30 @@ function performAIAttack(e, target) {
         else {
             let hit = atkRoll(e, e.attack, target);
             showRollResult({ roller: e.name, target: target.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(target), crit: hit.crit, fumble: hit.fumble });
-            
-            if(hit.crit){ 
-                sounds.effects.crit(); 
-                let d=dice.d(8)*2; target.hp-=d; 
-                log(`<b>${e.name}</b> CRITICA a ${target.name}: ${d}`, 'crit'); 
-                showFloatingText(target.pos.x, target.pos.y, d, '#f59e0b'); 
-                showDamageEffect(target.pos.x, target.pos.y, '#f59e0b', target, true); 
+    if(hit.crit){ 
+        playSound('effect', 'crit');
+        let d = rollDamage(e.dmg) * 2;
+        target.hp -= d;
+        log(`<b>${e.name}</b> CRITICA a ${target.name}: ${d}`, 'crit'); 
+        showFloatingText(target.pos.x, target.pos.y, d, '#f59e0b'); 
+        showDamageEffect(target.pos.x, target.pos.y, '#f59e0b', target, true); 
+        playEffect(target.pos.x, target.pos.y, 'physical-hit');
+    }
+else if(hit.total >= effectiveAC(target)){ 
+    playSound('effect', 'hit');
+    let d = rollDamage(e.dmg);
+    target.hp -= d;
+    log(`${e.name} golpea a ${target.name}: ${d}`, 'damage'); 
+    showFloatingText(target.pos.x, target.pos.y, d, '#ffffff'); 
+    showDamageEffect(target.pos.x, target.pos.y, '#ffffff', target);
+    playEffect(target.pos.x, target.pos.y, 'physical-hit');
+}
+
+            else { 
+              playSound('effect', 'miss');
+              log(`${e.name} falla.`); 
+              showFloatingText(target.pos.x, target.pos.y, 'Falla', '#9ca3af'); 
             }
-            else if(hit.total>= effectiveAC(target)){ 
-                sounds.effects.hit(); 
-                let d=dice.d(8); target.hp-=d; 
-                log(`${e.name} golpea a ${target.name}: ${d}`, 'damage'); 
-                showFloatingText(target.pos.x, target.pos.y, d, '#ffffff'); 
-                showDamageEffect(target.pos.x, target.pos.y, '#ffffff', target); 
-            }
-            else { sounds.effects.miss(); log(`${e.name} falla.`); showFloatingText(target.pos.x, target.pos.y, 'Falla', '#9ca3af'); }
             
             if(target.cls === 'GUERRERO') { target.res = Math.min(target.resmax, target.res + 1); log(`${target.name} gana 1 de Furia al ser golpeado!`, 'info'); }
         }
@@ -1072,7 +1231,7 @@ function performAIAttack(e, target) {
             if (state.heroes.every(h => h.hp <= 0)) { state.gameOver = true; log("<b>GAME OVER...</b>", 'game'); updateStatusPanel("GAME OVER"); }
         }
     } else {
-        log(`${e.name} no puede alcanzar a su objetivo y espera.`);
+        log(`${e.name} no puede alcanzar a su objetivo y espera.`, 'info');
     }
     
     renderUI();
@@ -1139,15 +1298,24 @@ function checkBossMechanics(boss) {
                   log(`Impacta, causando ${totalDmg} de daño.`, 'damage'); 
                   showFloatingText(target.pos.x, target.pos.y, totalDmg, '#ffffff'); 
                   showDamageEffect(target.pos.x, target.pos.y, '#ffffff', target, hit.crit);
+                  playEffect(target.pos.x, target.pos.y, 'physical-hit');
               } else { log('Falla miserablemente.'); }
               break;
           case 'autoDamage':
-              let totalDmg = bonus; for(let i = 0; i < ability.opts.dmgN; i++) totalDmg += dice.d(ability.opts.dmgS); target.hp -= totalDmg; log(`El hechizo impacta, causando ${totalDmg} de daño.`, 'damage'); showFloatingText(target.pos.x, target.pos.y, totalDmg, '#818cf8'); showDamageEffect(target.pos.x, target.pos.y, '#818cf8', target);
+              let totalDmg = bonus; for(let i = 0; i < ability.opts.dmgN; i++) totalDmg += dice.d(ability.opts.dmgS); target.hp -= totalDmg; log(`El hechizo impacta, causando ${totalDmg} de daño.`, 'damage'); showFloatingText(target.pos.x, target.pos.y, totalDmg, '#818cf8'); 
+              playEffect(target.pos.x, target.pos.y, 'arcane-hit');
               if (ability.opts.effect === 'confused') { target.conds.push({ key: 'confused', rounds: 2, desc: 'Confuso' }); log(`${target.name} queda confundido.`, 'damage'); }
               success = true;
               break;
           case 'heal':
-              let totalHeal = getAttrMod(actor.attrs.WIS); for(let i = 0; i < ability.opts.dmgN; i++) totalHeal += dice.d(ability.opts.dmgS); target.hp = Math.min(target.hpmax, target.hp + totalHeal); log(`${target.name} recupera ${totalHeal} PV.`, 'heal'); showFloatingText(target.pos.x, target.pos.y, `+${totalHeal}`, '#22c55e'); if (ability.opts.buff) { target.buffs.push(ability.opts.buff); log(`${target.name} se siente fortalecido!`, 'heal'); showBuffEffect(target.pos.x, target.pos.y); }
+              let totalHeal = getAttrMod(actor.attrs.WIS); for(let i = 0; i < ability.opts.dmgN; i++) totalHeal += dice.d(ability.opts.dmgS); target.hp = Math.min(target.hpmax, target.hp + totalHeal); log(`${target.name} recupera ${totalHeal} PV.`, 'heal'); 
+              showFloatingText(target.pos.x, target.pos.y, `+${totalHeal}`, '#22c55e');
+              playEffect(target.pos.x, target.pos.y, 'heal');
+              if (ability.opts.buff) { 
+                target.buffs.push(ability.opts.buff); 
+                log(`${target.name} se siente fortalecido!`, 'heal'); 
+                playEffect(target.pos.x, target.pos.y, 'divine');
+              }
               success = true;
               break;
           case 'stealBuff':
@@ -1156,7 +1324,8 @@ function checkBossMechanics(boss) {
                   const stolenBuff = target.buffs.splice(stolenIndex, 1)[0];
                   actor.buffs.push(stolenBuff); log(`¡${actor.name} roba el efecto '${stolenBuff.desc}' de ${target.name}!`, 'info');
               } else { const dmg = dice.d(6) + getAttrMod(actor.attrs.DEX); target.hp -= dmg; log(`No había nada que robar, así que le da un coscorrón por ${dmg} de daño.`, 'damage'); showFloatingText(target.pos.x, target.pos.y, dmg, '#eab308'); showDamageEffect(target.pos.x, target.pos.y, '#eab308', target); }
-              success = true;
+              success = true; 
+              playEffect(target.pos.x, target.pos.y, 'steal');
               break;
       }
       if (target.hp <= 0 && target.cls === undefined) killEnemy(target, actor); else checkBossMechanics(target);
@@ -1180,12 +1349,13 @@ function checkBossMechanics(boss) {
               let totalDmg = getDamageBonus(actor); for(let i = 0; i < ability.opts.dmgN; i++) totalDmg += dice.d(ability.opts.dmgS);
               e.hp -= totalDmg;
               log(`${e.name} es alcanzado, sufriendo ${totalDmg} de daño.`, 'damage');
-              showFloatingText(e.pos.x, e.pos.y, totalDmg, '#f97316'); showDamageEffect(e.pos.x, e.pos.y, '#f97316', e);
+              showFloatingText(e.pos.x, e.pos.y, totalDmg, '#f97316'); 
+              playEffect(e.pos.x, e.pos.y, 'physical-hit');
               if (ability.opts.effect === 'confused') { e.conds.push({key: 'confused', rounds: 2, desc: 'Confuso'}); log(`${e.name} parece muy confundido.`, 'damage'); }
               if (e.hp <= 0) killEnemy(e, actor); else checkBossMechanics(e);
           }
       });
-      if (enemiesHit > 0) showDamageEffect(center.x, center.y, '#f97316', null, true);
+      if (enemiesHit > 0) playEffect(center.x, center.y, 'fireball-aoe');
       state.mode = { type: 'none' }; clearHighlights(); renderUI();
   }
 
@@ -1280,7 +1450,6 @@ function clearHighlights() {
   clearAdvantageIndicators();
 }
 
-// CORRECCIÓN BUG TUTORIAL: onCellClick refactorizada para llamar a advanceTutorial en el callback de la animación.
 function onCellClick(e) {
     if (state.gameOver || state.isAnimating) return;
     const x = parseInt(e.currentTarget.dataset.x);
@@ -1302,11 +1471,10 @@ function onCellClick(e) {
     if(mode.type==='move'){
         const hero = state.heroes.find(h => h.id === mode.actorId);
         if (hero && mode.reachable[`${x},${y}`]) {
-            sounds.effects.click();
+            playSound('effect', 'click');
             hero.hasMoved = true;
             const enemiesBeforeMove = state.enemies.filter(en => en.pos && !cellAt(en.pos.x, en.pos.y).fog).length;
             
-            // La lógica del tutorial se comprueba DENTRO del callback, una vez el movimiento se ha completado.
             animateAndMoveToken(hero, {x, y}, () => {
                 revealAround(x,y,5); 
                 const enemiesAfterMove = state.enemies.filter(en => en.pos && !cellAt(en.pos.x, en.pos.y).fog).length;
@@ -1322,8 +1490,6 @@ function onCellClick(e) {
                 }
                 renderUI();
                 
-                // ¡AQUÍ ESTÁ LA CORRECCIÓN!
-                // Llamamos a advanceTutorial DESPUÉS de que el héroe se ha movido.
                 advanceTutorial({ type: 'move', hero });
             });
             clearHighlights(); 
@@ -1388,7 +1554,8 @@ function onCellClick(e) {
 function triggerCellEffects(hero, x, y) {
     const cell = cellAt(x, y);
     if (cell.type === 'trap') {
-        sounds.effects.trap(); const damage = dice.d(6); hero.hp -= damage;
+        playSound('effect', 'trap');
+        const damage = dice.d(6); hero.hp -= damage;
         log(`<b>${hero.name}</b> pisa una trampa y recibe ${damage} de daño!`, 'damage');
         showFloatingText(x, y, damage, '#ef4444'); showDamageEffect(x, y, '#ef4444', hero);
         cell.type = 'floor'; renderUI();
@@ -1398,13 +1565,37 @@ function triggerCellEffects(hero, x, y) {
 function interactWithCell(hero, x, y) {
     const cell = cellAt(x, y);
     if (cell.type === 'chest') { 
-        sounds.effects.click(); log(`<b>${hero.name}</b> abre un cofre.`, 'info'); 
+        playSound('effect', 'click');
+        log(`<b>${hero.name}</b> abre un cofre.`, 'info'); 
         hero.inventory.push({ name: "Poción de Curación", type: "potion", effect: () => { hero.hp = Math.min(hero.hpmax, hero.hp + 10); log(`${hero.name} usa una poción y recupera 10 PV.`, 'heal'); renderUI(); } }); 
         log("¡Ha encontrado una Poción de Curación!", 'heal'); cell.type = 'floor'; renderUI(); 
-    } else if (cell.type === 'door') { sounds.effects.click(); log(`${hero.name} examina la puerta.`); }
+    } else if (cell.type === 'door') { playSound('effect', 'click'); log(`${hero.name} examina la puerta.`); }
 }
 
-function showBuffEffect(x, y) { const cell = queryCellEl(x, y); if (cell) { cell.style.boxShadow = '0 0 24px 8px #fbbf24'; setTimeout(() => cell.style.boxShadow = '', 700); } }
+function playEffect(x, y, effectType) {
+    const cell = queryCellEl(x, y);
+    if (!cell) return;
+
+    const effectEl = document.createElement('div');
+    effectEl.className = `effect-overlay effect-${effectType}`;
+    
+    cell.appendChild(effectEl);
+    
+    setTimeout(() => effectEl.remove(), 800);
+}
+
+function showDamageEffect(x, y, color, target, isCrit = false) {
+    if (isCrit) {
+        document.body.classList.add('screen-shake');
+        setTimeout(() => document.body.classList.remove('screen-shake'), 300);
+    }
+    const cell = queryCellEl(x, y);
+    if (cell) {
+        cell.classList.add('shake');
+        setTimeout(() => cell.classList.remove('shake'), 500);
+    }
+    if(target?.cls) playSound('voice', 'hurt', { char: target });
+}
 
 function showDeathEffect(x, y) { const cell = queryCellEl(x, y); if (cell) { const smoke = document.createElement('div'); smoke.style.cssText = `position:absolute; left:0; top:0; width:32px; height:32px; border-radius:50%; background:radial-gradient(circle, #fff 0%, #888 60%, transparent 100%); opacity:0.7; pointer-events:none; z-index:10; animation:fade-smoke 0.8s forwards;`; cell.appendChild(smoke); setTimeout(() => smoke.remove(), 800); } }
 
@@ -1470,17 +1661,11 @@ function loadGame() {
             Object.keys(parsedState).forEach(key => {
                 state[key] = parsedState[key];
             });
-
-            // --- INICIO DE LA SOLUCIÓN: REHIDRATACIÓN ---
-            // Las funciones de las habilidades se pierden al guardar.
-            // Aquí las volvemos a conectar basándonos en la clase de cada héroe.
             state.heroes.forEach(hero => {
                 if (hero.cls && CLASSES[hero.cls]) {
                     hero.actions = CLASSES[hero.cls].actions;
                 }
             });
-            // --- FIN DE LA SOLUCIÓN ---
-
             log('<b>Partida cargada con éxito.</b>', 'game');
             document.getElementById('actSelector').value = state.currentAct;
             document.getElementById('actTitle').textContent = CAMPAIGN_ACTS[state.currentAct].title;
@@ -1496,13 +1681,13 @@ function loadGame() {
 }
 
 function initUI(){
-  document.getElementById('btnGenDungeon').addEventListener('click', ()=>{ sounds.effects.click(); generateDungeon(); });
-  document.getElementById('btnRollInit').addEventListener('click', ()=>{ sounds.effects.click(); rollInitiative(); });
-  document.getElementById('btnNextTurn').addEventListener('click', ()=>{ sounds.effects.click(); nextTurn(); });
+  document.getElementById('btnGenDungeon').addEventListener('click', ()=>{ playSound('effect', 'click'); generateDungeon(); });
+  document.getElementById('btnRollInit').addEventListener('click', ()=>{ playSound('effect', 'click'); rollInitiative(); });
+  document.getElementById('btnNextTurn').addEventListener('click', ()=>{ playSound('effect', 'click'); nextTurn(); });
   document.getElementById('toggleMusic').addEventListener('click', toggleMusic);
   
-  document.getElementById('btnSaveGame').addEventListener('click', () => { sounds.effects.click(); saveGame(); });
-  document.getElementById('btnLoadGame').addEventListener('click', () => { sounds.effects.click(); loadGame(); });
+  document.getElementById('btnSaveGame').addEventListener('click', () => { playSound('effect', 'click'); saveGame(); });
+  document.getElementById('btnLoadGame').addEventListener('click', () => { playSound('effect', 'click'); loadGame(); });
 
   const actSelector = document.getElementById('actSelector'); CAMPAIGN_ACTS.forEach((act, index) => { const option = document.createElement('option'); option.value = index; option.textContent = act.title; actSelector.appendChild(option); });
   actSelector.addEventListener('change', (e) => setupAct(parseInt(e.target.value)));
@@ -1511,23 +1696,18 @@ function initUI(){
   document.getElementById('btnSpawnEnemy').addEventListener('click', () => { const enemyKind = document.getElementById('enemySpawner').value; const enemyTier = document.getElementById('enemyTier').value; state.mode = { type: 'spawn-enemy', kind: enemyKind, tier: enemyTier }; log(`Selecciona una casilla para invocar a ${ENEMIES[enemyKind].name} (${enemyTier}).`); });
   document.getElementById('btnDM').addEventListener('click', () => { state.dmMode = !state.dmMode; document.getElementById('djPanel').classList.toggle('hidden', !state.dmMode); log(`Modo Director del Caos: ${state.dmMode ? 'ACTIVADO' : 'DESACTIVADO'}`, 'game'); if (!state.dmMode) state.mode = {type:'none'}; });
   const fogCheckbox = document.getElementById('toggleFog'); fogCheckbox.checked = !state.fogEnabled; fogCheckbox.addEventListener('change', () => { state.fogEnabled = !fogCheckbox.checked; renderMap(); });
-  document.addEventListener('keydown', (e) => { if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT' || state.isAnimating) return; if (e.key === 'n' || e.key === 'N') { sounds.effects.click(); nextTurn(); } if (e.key === 'i' || e.key === 'I') { sounds.effects.click(); rollInitiative(); } if (e.key === 'm' || e.key === 'M') { toggleMusic(); } });
-// REEMPLAZA LA LÍNEA ANTERIOR CON ESTE BLOQUE
+  document.addEventListener('keydown', (e) => { if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT' || state.isAnimating) return; if (e.key === 'n' || e.key === 'N') { playSound('effect', 'click'); nextTurn(); } if (e.key === 'i' || e.key === 'I') { playSound('effect', 'click'); rollInitiative(); } if (e.key === 'm' || e.key === 'M') { toggleMusic(); } });
 document.body.addEventListener('mousemove', e => {
     const tooltip = document.getElementById('tooltip');
     const mapContainer = document.getElementById('mapContainer');
     
-    // Obtenemos la posición del cursor relativa a la ventana
     let tooltipX = e.clientX;
     let tooltipY = e.clientY;
 
-    // Si el cursor está sobre el mapa, ajustamos la posición
-    // teniendo en cuenta el scroll del contenedor del mapa.
     if (mapContainer.contains(e.target)) {
         tooltipX = e.pageX - mapContainer.scrollLeft;
         tooltipY = e.pageY - mapContainer.scrollTop;
     } else {
-         // Si está fuera del mapa, usamos la posición de la página directamente
         tooltipX = e.pageX;
         tooltipY = e.pageY;
     }
@@ -1638,18 +1818,7 @@ function showAiIntent(source, target) {
     animate();
 }
 
-function showDamageEffect(x, y, color, target, isCrit = false) {
-    if (isCrit) {
-        document.body.classList.add('screen-shake');
-        setTimeout(() => document.body.classList.remove('screen-shake'), 300);
-    }
-    const cell = queryCellEl(x, y);
-    if (cell) cell.classList.add('shake');
-    setTimeout(() => cell?.classList.remove('shake'), 500);
-    if(target?.cls) sounds.playVoice(target, 'hurt');
-}
-
-function showKillCam(hero) {
+function showKillCam(hero, onCompleteCallback) {
     const overlay = document.getElementById('kill-cam-overlay');
     const img = document.getElementById('kill-cam-image');
     img.src = HERO_PORTRAITS[hero.cls];
@@ -1667,6 +1836,9 @@ function showKillCam(hero) {
         setTimeout(() => {
             overlay.style.display = 'none';
             state.isAnimating = false;
+            if (onCompleteCallback) {
+                onCompleteCallback();
+            }
         }, 500);
     }, 2500);
 }
@@ -1704,7 +1876,6 @@ function showRollResult(data) {
   }, 2000);
 }
 
-// CORRECCIÓN BUG TUTORIAL: Nueva lógica de tutorial
 function advanceTutorial(action) {
     if (!state.tutorial.active) return;
 
@@ -1717,20 +1888,24 @@ function advanceTutorial(action) {
                 action.hero.pos.y === state.tutorial.targetCell.y) {
                 
                 if (state.enemies.length === 0) {
-                    // CORRECCIÓN: El goblin ahora aparece en una casilla adyacente.
                     spawnEnemyAt(14, 9, 'GOBLIN_BUROCRATA', 'basic');
-                    renderUI();
+                    rollInitiative(); 
                 }
 
                 state.tutorial.step++;
-                checkTutorialStep();
+                setTimeout(() => checkTutorialStep(), 1000);
             }
             break;
 
         case 1: // Esperando ataque básico
-            if (action.type === 'attack' && action.success) {
-                state.tutorial.step++;
-                checkTutorialStep();
+            if (action.type === 'attack' && action.ability.key === 'basic_attack') {
+                if (action.success) {
+                    state.tutorial.step++;
+                    checkTutorialStep();
+                } else {
+                    showTutorialMessage("¡Mala suerte! Los dados no estuvieron de tu lado. Pulsa <b>Siguiente Turno</b> para que llegue tu oportunidad de atacar de nuevo.");
+                    document.getElementById('btnNextTurn').classList.add('tutorial-highlight');
+                }
             } 
             else if (action.type === 'enemy_killed') {
                 log("<b>TUTORIAL:</b> ¡Vaya! Ni siquiera necesitaste tu ataque especial. Impresionante.", 'game');
@@ -1740,9 +1915,13 @@ function advanceTutorial(action) {
             break;
 
         case 2: // Esperando ataque de habilidad
-            if (action.type === 'ability' && action.ability.key === 'golpe_poder' && action.success) {
-                state.tutorial.step++;
-                checkTutorialStep();
+            if (action.type === 'ability' && action.ability.key === 'golpe_poder') {
+                if (action.success) {
+                    // No avanzamos el paso aquí, esperamos a que la llamada de 'killEnemy' lo haga.
+                } else {
+                    showTutorialMessage("¡Fallaste! No te preocupes, hasta los mejores héroes yerran. Pulsa <b>Siguiente Turno</b> e inténtalo otra vez.");
+                    document.getElementById('btnNextTurn').classList.add('tutorial-highlight');
+                }
             }
             else if (action.type === 'enemy_killed') {
                 log("<b>TUTORIAL:</b> El objetivo ha sido eliminado. ¡Buen trabajo!", 'game');
@@ -1752,6 +1931,9 @@ function advanceTutorial(action) {
             break;
     }
 }
+
+
+
 function checkTutorialStep() {
     if (!state.tutorial.active) return;
     const throg = state.heroes.find(h => h.cls === 'GUERRERO');
