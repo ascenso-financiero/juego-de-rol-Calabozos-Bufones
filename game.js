@@ -3,7 +3,8 @@
 // ==========================
 const RNG = (n) => Math.floor(Math.random()*n);
 const dice = { d: (sides) => RNG(sides)+1 };
-const XP_TABLE = [0, 100, 300, 600, 1000, 1500, 2200, 3000, 4000, 5200];
+// MEJORA: Tabla de XP expandida a nivel 10
+const XP_TABLE = [0, 100, 300, 600, 1000, 1500, 2200, 3000, 4000, 5200, 6500];
 
 const STATUS_ICONS = {
   cover: { icon: '🧱', title: 'A cubierto (-2 a la tirada de ataque contra él)' },
@@ -12,7 +13,8 @@ const STATUS_ICONS = {
   confused: { icon: '❓', title: 'Confuso' },
   invulnerable: { icon: '✨', title: 'Invulnerable' },
   divine_might: { icon: '⚔️', title: 'Poder Divino (+2 Ataque)' },
-  melancholy: { icon: '💧', title: 'Melancolía (-2 Ataque)' }
+  melancholy: { icon: '💧', title: 'Melancolía (-2 Ataque)' },
+  sharpened: { icon: '🔪', title: 'Afilado (+2 al daño en el siguiente ataque)'}
 };
 
 const HERO_PORTRAITS = {
@@ -51,69 +53,176 @@ const HERO_LORE = {
   }
 };
 
+// MEJORA: Base de datos de objetos para el inventario
+const ITEM_DATABASE = {
+    HEALING_POTION: {
+        name: "Poción de Curación",
+        info: "Un clásico burbujeante. Recupera 10 PV.",
+        effect: (hero) => {
+            hero.hp = Math.min(hero.hpmax, hero.hp + 10);
+            log(`${hero.name} usa una poción y recupera 10 PV.`, 'heal');
+            showFloatingText(hero.pos.x, hero.pos.y, `+10`, '#22c55e');
+            playEffect(hero.pos.x, hero.pos.y, 'heal');
+        }
+    },
+    SHARPENING_STONE: {
+        name: "Piedra de Afilar",
+        info: "Añade +2 de daño al siguiente ataque.",
+        effect: (hero) => {
+            hero.buffs.push({ key: 'sharpened', rounds: 2, desc: 'Afilado (+2 Daño)' });
+            log(`${hero.name} afila su arma, preparándose para un golpe certero.`, 'info');
+            playEffect(hero.pos.x, hero.pos.y, 'buff');
+        }
+    },
+    SMOKE_BOMB: {
+        name: "Bomba de Humo",
+        info: "Permite un reposicionamiento táctico en un radio de 4 casillas.",
+        effect: (hero) => {
+            log(`${hero.name} lanza una bomba de humo y se prepara para desaparecer.`, 'info');
+            state.mode = { type: 'item-teleport', actorId: hero.id, range: 4 };
+            const reachable = findReachableCells(hero, 4, true); // True para movimiento libre
+            highlightReachable(reachable);
+            updateStatusPanel(`Elige dónde quieres que ${hero.name} reaparezca.`);
+        }
+    },
+    FIREBALL_SCROLL: {
+        name: "Pergamino de Bola de Fuego",
+        info: "Desata una explosión de 2d6 de daño en un radio de 2 casillas. Cualquiera puede usarlo... con cuidado.",
+        effect: (hero) => {
+            log(`${hero.name} lee un pergamino con runas ardientes.`, 'crit');
+            const ability = {
+                name: "Bola de Fuego (Pergamino)",
+                radius: 2,
+                range: 8,
+                opts: { radius: 2, dmgN: 2, dmgS: 6 }
+            };
+            state.mode = { type: 'item-aoe', actorId: hero.id, ability: ability };
+            updateStatusPanel(`Apunta la Bola de Fuego del pergamino.`);
+        }
+    }
+};
+
 const CLASSES = {
-  GUERRERO: { 
-      name:"Guerrero Buldero", 
-      lore: HERO_LORE.GUERRERO, 
-      base:{ hp: 14, ac: 14, speed: 6, resourceName:"Furia", res:2, attrs:{STR:16, DEX:12, CON:14, INT:8, WIS:10, CHA:12} }, 
-      actions:[ 
-          { key:"golpe_poder", name:"Golpe Poderoso", info:"Ataque con +2 de daño.", cost:1, range:1, use:(ctx, target)=> basicMelee(ctx, target, { extraDamage: 2 }) }, 
-          { 
-              key: "inmortal", name: "Inmortal (por un rato)", info: "1 vez por combate, ignora todo el daño hasta su próximo turno. Coste: 2 Furia", cost: 2, range: 0,
+  GUERRERO: {
+      name:"Guerrero Buldero", lore: HERO_LORE.GUERRERO,
+      base:{ hp: 14, ac: 14, speed: 6, resourceName:"Furia", res:2, attrs:{STR:16, DEX:12, CON:14, INT:8, WIS:10, CHA:12} },
+      actions:[
+          { key:"golpe_poder", name:"Golpe Poderoso", info:"Ataque con +2 de daño.", cost:1, range:1, use:(ctx, target)=> basicMelee(ctx, target, { extraDamage: 2 }) },
+          { key: "inmortal", name: "Inmortal (por un rato)", info: "1 vez por combate, ignora todo el daño hasta su próximo turno. Coste: 2 Furia", cost: 2, range: 0,
               use: (ctx) => {
-                  if (ctx.self.usedInmortalThisCombat) {
-                      log(`<b>${ctx.self.name}</b> ya ha usado su poder de inmortalidad en este combate.`, 'info');
-                      return;
-                  }
-                  ctx.self.usedInmortalThisCombat = true;
-                  ctx.self.buffs.push({key: 'invulnerable', rounds: 2, desc: 'Invulnerable a todo el daño'}); 
-                  log(`<b>${ctx.self.name} grita '¡NO HOY!' y se vuelve invulnerable.</b>`, 'game'); 
-                  showBuffEffect(ctx.self.pos.x, ctx.self.pos.y);
-                  const isCombat = state.initOrder.length > 0;
-                  if (isCombat) ctx.self.hasActed = true;
-                  ctx.self.res -= ctx.ability.cost;
-                  state.mode = { type: 'none' };
-                  clearHighlights();
-                  renderUI();
-              } 
+                  if (ctx.self.usedInmortalThisCombat) { log(`<b>${ctx.self.name}</b> ya ha usado su poder de inmortalidad en este combate.`, 'info'); return; }
+                  ctx.self.usedInmortalThisCombat = true; ctx.self.buffs.push({key: 'invulnerable', rounds: 2, desc: 'Invulnerable a todo el daño'});
+                  log(`<b>${ctx.self.name} grita '¡NO HOY!' y se vuelve invulnerable.</b>`, 'game'); showBuffEffect(ctx.self.pos.x, ctx.self.pos.y);
+                  const isCombat = state.initOrder.length > 0; if (isCombat) ctx.self.hasActed = true; ctx.self.res -= ctx.ability.cost;
+                  state.mode = { type: 'none' }; clearHighlights(); renderUI();
+              }
+          },
+          // MEJORA: Habilidad definitiva de nivel 5
+          { key: "grito_desafiante", name: "Grito Desafiante", info: "Ganas +2 CA y todos los enemigos en un radio de 3 casillas deben atacarte si pueden. Coste: 3 Furia", cost: 3, range: 0, requiredLevel: 5,
+            use: (ctx) => {
+                log(`<b>${ctx.self.name}</b> emite un rugido atronador que atrae la atención.`, 'game');
+                ctx.self.buffs.push({ key: 'defending', ac: 2, rounds: 3, desc: '+2 CA por desafío' });
+                state.enemies.forEach(e => {
+                    if (e.hp > 0 && e.pos && dist(e.pos, ctx.self.pos) <= 3) {
+                        e.conds.push({ key: 'taunted', targetId: ctx.self.id, rounds: 2, desc: `Provocado por ${ctx.self.name}` });
+                        log(`${e.name} ha sido provocado.`, 'damage');
+                    }
+                });
+                if (state.initOrder.length > 0) ctx.self.hasActed = true; ctx.self.res -= ctx.ability.cost;
+                state.mode = { type: 'none' }; clearHighlights(); renderUI();
+            }
           }
-      ] 
+      ]
   },
-  MAGO: { 
-      name:"Mago Sarcástico", 
-      lore: HERO_LORE.MAGO, 
-      base:{ hp: 10, ac: 12, speed: 6, resourceName:"Maná", res:4, attrs:{STR:8, DEX:14, CON:12, INT:16, WIS:14, CHA:10} }, 
-      actions:[ 
+  MAGO: {
+      name:"Mago Sarcástico", lore: HERO_LORE.MAGO,
+      base:{ hp: 10, ac: 12, speed: 6, resourceName:"Maná", res:4, attrs:{STR:8, DEX:14, CON:12, INT:16, WIS:14, CHA:10} },
+      actions:[
           { key:"misil_magico", name:"Misil Mágico", info:"Auto-impacta.", cost:1, range:10, use:(ctx, target)=> autoDamage(ctx, target, { dmgN: 2, dmgS: 4 }) },
-          { 
-              key: "tormenta_sarcasmo", name: "Tormenta de Sarcasmo", info: "Ataque en área que daña y confunde a los enemigos con insultos arcanos. Coste: 3 Maná", cost: 3, range: 8, radius: 2,
-              use: (ctx, targetPos) => fireball(ctx, targetPos, {radius: 2, dmgN: 2, dmgS: 8, effect: 'confused'}) 
+          { key: "tormenta_sarcasmo", name: "Tormenta de Sarcasmo", info: "Ataque en área que daña y confunde a los enemigos con insultos arcanos. Coste: 3 Maná", cost: 3, range: 8, radius: 2,
+              use: (ctx, targetPos) => fireball(ctx, targetPos, {radius: 2, dmgN: 2, dmgS: 8, effect: 'confused'})
+          },
+          // MEJORA: Habilidad definitiva de nivel 5
+          { key: "singularidad_caotica", name: "Singularidad Caótica", info: "Crea una singularidad que inflige 5d6 de daño a un objetivo. Tira un d20: con 1-5, te haces la mitad del daño a ti mismo. Coste: 4 Maná", cost: 4, range: 10, requiredLevel: 5,
+            use: (ctx, target) => {
+                const dmg = dice.d(6) + dice.d(6) + dice.d(6) + dice.d(6) + dice.d(6) + getDamageBonus(ctx.self);
+                log(`<b>${ctx.self.name}</b> crea una fisura en la realidad sobre <b>${target.name}</b>, causando ${dmg} de daño caótico.`, 'crit');
+                target.hp -= dmg; showFloatingText(target.pos.x, target.pos.y, dmg, '#a855f7'); playEffect(target.pos.x, target.pos.y, 'arcane-hit');
+                const backlashRoll = dice.d(20);
+                if (backlashRoll <= 5) {
+                    const selfDmg = Math.floor(dmg / 2);
+                    ctx.self.hp -= selfDmg;
+                    log(`La magia es inestable. ¡<b>${ctx.self.name}</b> sufre ${selfDmg} de daño de rebote!`, 'damage');
+                    showFloatingText(ctx.self.pos.x, ctx.self.pos.y, selfDmg, '#ef4444');
+                }
+                if (target.hp <= 0 && target.cls === undefined) killEnemy(target, ctx.self);
+                if (state.initOrder.length > 0) ctx.self.hasActed = true; ctx.self.res -= ctx.ability.cost;
+                state.mode = { type: 'none' }; clearHighlights(); renderUI();
+            }
           }
-      ] 
+      ]
   },
-  PICARO: { 
-      name:"Pícaro Bocazas", 
-      lore: HERO_LORE.PICARO, 
-      base:{ hp: 12, ac: 13, speed: 7, resourceName:"Astucia", res:3, attrs:{STR:10, DEX:16, CON:12, INT:14, WIS:8, CHA:14} }, 
-      actions:[ 
-          { key:"ataque_furtivo", name:"Ataque Furtivo", info:"+1d6 si un colega distrae.", cost:1, range:1, use:(ctx, target)=> basicMelee(ctx, target, { requireAllyAdj:true, extraDmgN: 1, extraDmgS: 6 }) }, 
-          { 
-              key: "bolsillos_ajenos", name: "Bolsillos Ajenos", info: "Roba un 'buff' aleatorio de un enemigo o simplemente le causa daño si no tiene nada que robar. Coste: 2 Astucia", cost: 2, range: 5, 
-              use: (ctx, target) => stealBuff(ctx, target) 
+  PICARO: {
+      name:"Pícaro Bocazas", lore: HERO_LORE.PICARO,
+      base:{ hp: 12, ac: 13, speed: 7, resourceName:"Astucia", res:3, attrs:{STR:10, DEX:16, CON:12, INT:14, WIS:8, CHA:14} },
+      actions:[
+          { key:"ataque_furtivo", name:"Ataque Furtivo", info:"+1d6 si un colega distrae.", cost:1, range:1, use:(ctx, target)=> basicMelee(ctx, target, { requireAllyAdj:true, extraDmgN: 1, extraDmgS: 6 }) },
+          { key: "bolsillos_ajenos", name: "Bolsillos Ajenos", info: "Roba un 'buff' aleatorio de un enemigo o simplemente le causa daño si no tiene nada que robar. Coste: 2 Astucia", cost: 2, range: 5,
+              use: (ctx, target) => stealBuff(ctx, target)
+          },
+          // MEJORA: Habilidad definitiva de nivel 5
+          { key: "acto_desaparicion", name: "Acto de Desaparición", info: "Te vuelves invisible y te teletransportas hasta 5 casillas. Tu siguiente ataque este combate será un crítico garantizado. Coste: 3 Astucia", cost: 3, range: 5, requiredLevel: 5,
+            use: (ctx) => {
+                log(`<b>${ctx.self.name}</b> sonríe y se desvanece en las sombras.`, 'info');
+                ctx.self.buffs.push({ key: 'guaranteed_crit', rounds: 100, desc: 'Crítico garantizado' }); // dura todo el combate
+                state.mode = { type: 'item-teleport', actorId: ctx.self.id, range: 5, fromAbility: true, cost: ctx.ability.cost };
+                const reachable = findReachableCells(ctx.self, 5, true);
+                highlightReachable(reachable);
+                updateStatusPanel(`Elige dónde reaparecerá ${ctx.self.name}.`);
+                // El resto de la lógica se maneja en onCellClick y la función de teleport
+            }
           }
-      ] 
+      ]
   },
-  CLERIGO: { 
-      name:"Clérigo Irreverente", 
-      lore: HERO_LORE.CLERIGO, 
-      base:{ hp: 12, ac: 14, speed: 6, resourceName:"Fe", res:3, attrs:{STR:14, DEX:8, CON:12, INT:10, WIS:16, CHA:14} }, 
-      actions:[ 
-          { key:"curar", name:"Sanación", info:"Cura a un aliado.", cost:1, range:6, use:(ctx, target)=> healTarget(ctx, target, { dmgN:2, dmgS:4 }) }, 
-          { 
-              key: "intervencion_divina", name: "Intervención Divina", info: "Una potente curación sobre un aliado que también le otorga +2 al ataque durante 1 ronda. Coste: 2 Fe", cost: 2, range: 6, 
-              use: (ctx, target) => healTarget(ctx, target, { dmgN: 4, dmgS: 8, dmgMod: 5, buff: {key: 'divine_might', attack: 2, rounds: 2, desc: '+2 al ataque'}}) 
+  CLERIGO: {
+      name:"Clérigo Irreverente", lore: HERO_LORE.CLERIGO,
+      base:{ hp: 12, ac: 14, speed: 6, resourceName:"Fe", res:3, attrs:{STR:14, DEX:8, CON:12, INT:10, WIS:16, CHA:14} },
+      actions:[
+          { key:"curar", name:"Sanación", info:"Cura a un aliado.", cost:1, range:6, use:(ctx, target)=> healTarget(ctx, target, { dmgN:2, dmgS:4 }) },
+          { key: "intervencion_divina", name: "Intervención Divina", info: "Una potente curación sobre un aliado que también le otorga +2 al ataque durante 1 ronda. Coste: 2 Fe", cost: 2, range: 6,
+              use: (ctx, target) => healTarget(ctx, target, { dmgN: 4, dmgS: 8, dmgMod: 5, buff: {key: 'divine_might', attack: 2, rounds: 2, desc: '+2 al ataque'}})
+          },
+          // MEJORA: Habilidad definitiva de nivel 5
+          { key: "palabra_divina", name: "Palabra Divina", info: "Todos los aliados en un radio de 4 se curan 2d8 PV y todos los enemigos en el mismo radio reciben 2d8 de daño sagrado. Coste: 3 Fe", cost: 3, range: 0, requiredLevel: 5,
+            use: (ctx) => {
+                log(`<b>${ctx.self.name}</b> invoca el poder de su deidad patrona.`, 'game');
+                const radius = 4;
+                // Curar aliados
+                state.heroes.forEach(h => {
+                    if (h.hp > 0 && h.pos && dist(h.pos, ctx.self.pos) <= radius) {
+                        const healing = dice.d(8) + dice.d(8) + getAttrMod(ctx.self.attrs.WIS);
+                        h.hp = Math.min(h.hpmax, h.hp + healing);
+                        log(`${h.name} es bañado en luz divina y recupera ${healing} PV.`, 'heal');
+                        showFloatingText(h.pos.x, h.pos.y, `+${healing}`, '#22c55e');
+                        playEffect(h.pos.x, h.pos.y, 'divine');
+                    }
+                });
+                // Dañar enemigos
+                state.enemies.forEach(e => {
+                    if (e.hp > 0 && e.pos && dist(e.pos, ctx.self.pos) <= radius) {
+                        const dmg = dice.d(8) + dice.d(8) + getAttrMod(ctx.self.attrs.WIS);
+                        e.hp -= dmg;
+                        log(`${e.name} es castigado por el poder divino, sufriendo ${dmg} de daño.`, 'damage');
+                        showFloatingText(e.pos.x, e.pos.y, dmg, '#facc15');
+                        if (e.hp <= 0) killEnemy(e, ctx.self);
+                    }
+                });
+
+                if (state.initOrder.length > 0) ctx.self.hasActed = true; ctx.self.res -= ctx.ability.cost;
+                state.mode = { type: 'none' }; clearHighlights(); renderUI();
+            }
           }
-      ] 
+      ]
   }
 };
 
@@ -136,13 +245,78 @@ const CAMPAIGN_ACTS = [
   { title: "Acto IV: La Cuarta Pared Rota", synopsis: "La realidad se desmorona de formas extrañas y personales. Una voz os juzga. La Sombra del Narrador se ha cansado de su juego y quiere un final dramático, cueste lo que cueste.", faction: "Todas", missionDesc: "Todas las facciones se unen. Hay que evitar que el Narrador borre el archivo del mundo.", missionObj: "Derrota a la Sombra del Narrador.", enemies: ["MIMICO_EXISTENCIAL", "ORCO_CHISTOSO", "REY_ORCO_KARAOKE"], boss: "SOMBRA_NARRADOR", mapStyle: "act4" }
 ];
 
+// MEJORA: Base de datos de objetos interactivos
+const INTERACTIVE_OBJECTS = {
+    altar: {
+        icon: '🙏',
+        dialogs: [
+            "El altar de piedra está dedicado a una deidad menor del 'Caos Organizado'. Sientes una extraña sensación de propósito y confusión a la vez.",
+            "Una inscripción reza: 'Por favor, no dejar ofrendas. El conserje está de vacaciones'. Dejas una moneda de cobre por si acaso.",
+            "Al tocar el altar, una voz resuena en tu cabeza: 'Hemos estado intentando contactarle acerca de la garantía extendida de su alma...'"
+        ]
+    },
+    libreria: {
+        icon: '📜',
+        dialogs: [
+            "La mayoría de los libros son manuales de instrucciones para muebles de una marca incomprensible. Uno de ellos se titula: 'Cómo Fingir que Entiendes la Magia'.",
+            "Encuentras un libro de cocina. La receta del 'Estofado de Limo Nostálgico' parece prometer un sabor a infancia y arrepentimiento.",
+            "Un tomo polvoriento se abre solo en una página que describe a un grupo de aventureros muy parecido al vuestro. El último capítulo se titula: 'Y entonces, todo salió terriblemente mal'."
+        ]
+    }
+};
+
+// MEJORA: Base de datos de eventos aleatorios
+const RANDOM_EVENTS = [
+    {
+        title: "Fuente Murmurante",
+        description: (hero) => `Encuentras una pequeña fuente. El agua parece susurrar palabras de aliento. ${hero.name} bebe y se siente revitalizado.`,
+        effect: (hero) => {
+            const healing = dice.d(6);
+            hero.hp = Math.min(hero.hpmax, hero.hp + healing);
+            log(`La fuente cura a ${hero.name} ${healing} PV.`, 'heal');
+        }
+    },
+    {
+        title: "Cofre Olvidado",
+        description: () => "¡Tropiezas con un cofre que los anteriores exploradores pasaron por alto!",
+        effect: (hero) => {
+            const itemKeys = Object.keys(ITEM_DATABASE);
+            const randomItemKey = itemKeys[RNG(itemKeys.length)];
+            const newItem = { ...ITEM_DATABASE[randomItemKey], key: randomItemKey };
+            hero.inventory.push(newItem);
+            log(`¡Has encontrado un objeto: ${newItem.name}!`, 'game');
+        }
+    },
+    {
+        title: "Estatua Ominosa",
+        description: (hero) => `${hero.name} toca una estatua con forma de dado de 20 caras. Siente una oleada de... ¿suerte?`,
+        effect: (hero) => {
+            if (dice.d(2) === 1) {
+                hero.buffs.push({ key: 'blessed', rounds: 120, desc: 'Bendecido (+1 a las tiradas)' });
+                log(`${hero.name} se siente afortunado.`, 'info');
+            } else {
+                hero.conds.push({ key: 'cursed', rounds: 120, desc: 'Maldito (-1 a las tiradas)' });
+                log(`${hero.name} siente que algo no va bien...`, 'damage');
+            }
+        }
+    },
+    {
+        title: "Viento Misterioso",
+        description: () => "Un viento repentino recorre el pasillo, apagando vuestras antorchas por un momento. Cuando la luz vuelve, algo ha cambiado.",
+        effect: () => {
+            log("El viento susurra secretos arcanos...", 'info');
+            // Podría tener efectos más complejos en el futuro, como cambiar parte del mapa
+        }
+    }
+];
+
 const state = {
   gridW: 24, gridH: 18, map: [],
   heroes: [], enemies: [], bossObjects: [],
-  nextId: 1, fogEnabled: true, 
+  nextId: 1, fogEnabled: true,
   mode: { type: 'none' },
   initOrder: [], turnIndex: -1, round: 0,
-  initialInitiative: [], 
+  initialInitiative: [],
   revivedThisRound: [],
   dmMode: false, dmTool: 'wall',
   currentAct: 0, dungeonLevel: 0, bossSpawned: false,
@@ -244,7 +418,7 @@ async function playMusic(actIndex) {
         bsoAudio.pause();
         bsoAudio = null;
     }
-    
+
     // Asegura que el contexto de audio general esté activo
     if (Tone.context.state !== 'running') {
         await Tone.context.resume();
@@ -257,7 +431,7 @@ async function playMusic(actIndex) {
     bsoAudio = new Audio(bsoFile);
     bsoAudio.loop = true;
     bsoAudio.volume = 0.35;
-    
+
     try {
         await bsoAudio.play();
         isMusicPlaying = true;
@@ -306,15 +480,15 @@ function log(msg, type = 'default'){
     const el = document.getElementById('log');
     const line = document.createElement('div');
     line.className = `log-line log-${type}`;
-    
+
     const isCombat = state.initOrder.length > 0;
     const roundPrefix = isCombat ? `<span class="text-slate-500 mr-1">R${state.round}:</span>` : '';
-    
+
     // Añade el icono si el tipo existe en nuestro mapa de iconos
     const icon = LOG_ICONS[type] ? `<span class="log-icon">${LOG_ICONS[type]}</span>` : '';
-    
+
     line.innerHTML = roundPrefix + icon + msg;
-    
+
     if (el.firstChild) {
         el.firstChild.style.opacity = '0.7';
         el.firstChild.style.fontWeight = 'normal';
@@ -340,6 +514,12 @@ function queryCellEl(x,y){ return document.querySelector(`#map .cell[data-x="${x
 function atkRoll(attacker, bonus, target){
     let finalBonus = bonus;
     if (hasCover(attacker, target)) finalBonus -= 2;
+
+    const blessed = (attacker.buffs || []).find(b => b.key === 'blessed');
+    const cursed = (attacker.conds || []).find(c => c.key === 'cursed');
+    if (blessed) finalBonus += 1;
+    if (cursed) finalBonus -= 1;
+
     const r = dice.d(20);
     return {r, total: r + finalBonus, crit: r===20, fumble: r===1, finalBonus};
 }
@@ -365,35 +545,26 @@ function hasCover(attacker, target) {
     return false;
 }
 
-function rollDamage(dmgString) {
-    // Si no hay string de daño, devuelve un valor bajo por defecto para evitar errores.
+function rollDamage(dmgString, char) {
     if (!dmgString || typeof dmgString !== 'string' || dmgString === "0") return 0;
-
     const parts = dmgString.split('+');
     let totalDamage = 0;
-    
-    // Parte de los dados (ej: "2d8")
     const dicePart = parts[0];
     const diceInfo = dicePart.split('d');
+    if (diceInfo.length !== 2) { console.error(`Formato de dado inválido: ${dicePart}`); return 1; }
+    const numDice = parseInt(diceInfo[0]), sides = parseInt(diceInfo[1]);
+    for (let i = 0; i < numDice; i++) { totalDamage += dice.d(sides); }
+    if (parts.length > 1) { totalDamage += parseInt(parts[1]); }
     
-    if (diceInfo.length !== 2) {
-        console.error(`Formato de dado inválido en rollDamage: ${dicePart}`);
-        return 1; // Devuelve un daño mínimo si hay un error de formato
+    // MEJORA: Aplicar buffs de daño como el de la Piedra de Afilar
+    if (char) {
+        const sharpenedBuffIndex = (char.buffs || []).findIndex(b => b.key === 'sharpened');
+        if (sharpenedBuffIndex > -1) {
+            log(`${char.name} golpea con su arma afilada para +2 de daño!`, 'crit');
+            totalDamage += 2;
+            char.buffs.splice(sharpenedBuffIndex, 1);
+        }
     }
-
-    const numDice = parseInt(diceInfo[0]);
-    const sides = parseInt(diceInfo[1]);
-
-    for (let i = 0; i < numDice; i++) {
-        totalDamage += dice.d(sides);
-    }
-
-    // Parte del bonus (ej: 3)
-    if (parts.length > 1) {
-        const bonusPart = parseInt(parts[1]);
-        totalDamage += bonusPart;
-    }
-
     return totalDamage;
 }
 
@@ -407,8 +578,8 @@ function setupAct(actIndex) {
   document.getElementById('missionDescription').textContent = act.missionDesc;
   document.getElementById('missionObjective').textContent = `Objetivo: ${act.missionObj}`;
   state.dungeonLevel = 0; state.bossSpawned = false;
-  playMusic(state.currentAct); 
-  
+  playMusic(state.currentAct);
+
   if(state.tutorial.active && state.tutorial.step < 3) {
     generateTutorialDungeon();
   } else {
@@ -419,7 +590,7 @@ function setupAct(actIndex) {
 function generateTutorialDungeon() {
     blankMap();
     carveRoom(8, 7, 8, 5);
-    
+
     const throg = state.heroes.find(h => h.cls === 'GUERRERO');
     if (throg) {
       throg.pos = { x: 10, y: 9 };
@@ -430,7 +601,7 @@ function generateTutorialDungeon() {
     });
 
     state.enemies = [];
-    
+
     revealAll(true);
     state.fogEnabled = false;
 
@@ -463,9 +634,20 @@ function generateDungeon(){
   for(let r=0;r<R;r++){ const w=4+RNG(5), h=3+RNG(4); const x=1+RNG(state.gridW-w-2), y=1+RNG(state.gridH-h-2); carveRoom(x,y,w,h); rooms.push({x,y,w,h,cx:x+Math.floor(w/2), cy:y+Math.floor(h/2)}); }
   rooms.sort((a,b)=>a.cx-b.cx);
   for(let i=0;i<rooms.length-1;i++) connectRooms(rooms[i].cx, rooms[i].cy, rooms[i+1].cx, rooms[i+1].cy);
-  
+
+  // MEJORA: Colocar objetos interactivos
+  rooms.forEach(room => {
+      if (RNG(10) < 2) { // 20% de probabilidad por sala
+          const x = room.x + RNG(room.w);
+          const y = room.y + RNG(room.h);
+          if (cellAt(x, y).type === 'floor') {
+              cellAt(x, y).type = RNG(2) === 0 ? 'altar' : 'libreria';
+          }
+      }
+  });
+
   state.heroes.forEach((h, i) => { const r=rooms[0]||{cx:12, cy:9}; h.pos = {x:r.cx+i, y:r.cy}; h.lastPos = {...h.pos}; });
-  
+
   state.enemies = [];
   const enemyCount = 2 + state.dungeonLevel + RNG(3);
   for (let i = 0; i < enemyCount; i++) {
@@ -487,7 +669,7 @@ function generateDungeon(){
   revealAll(false);
   state.heroes.forEach(h => { if(h.pos) revealAround(h.pos.x, h.pos.y, 5) });
   nextTurn();
-  renderUI(); 
+  renderUI();
   log(`Has entrado en el nivel ${state.dungeonLevel} de la mazmorra.`, 'info');
 }
 
@@ -503,7 +685,7 @@ function renderUI() {
   } else {
       document.getElementById('btnNextTurn').classList.remove('end-turn-glow');
   }
-  
+
   const revealedEnemies = state.enemies.some(en => en.pos && !cellAt(en.pos.x, en.pos.y).fog);
   document.getElementById('btnRollInit').disabled = isCombat || state.enemies.length === 0 || !revealedEnemies;
   document.getElementById('btnNextTurn').disabled = false;
@@ -513,12 +695,12 @@ function renderUI() {
 function renderMap(){
   const mapEl = document.getElementById('map');
   const actStyle = CAMPAIGN_ACTS[state.currentAct]?.mapStyle || 'act1';
-  
+
   if (!mapEl.children.length) {
       mapEl.style.gridTemplateColumns = `repeat(${state.gridW}, 32px)`;
       mapEl.innerHTML = '';
       for(let y=0;y<state.gridH;y++){ for(let x=0;x<state.gridW;x++){
-          const cellEl = document.createElement('div'); 
+          const cellEl = document.createElement('div');
           cellEl.className = 'cell'; cellEl.dataset.x=x; cellEl.dataset.y=y;
           cellEl.addEventListener('click', onCellClick);
           cellEl.addEventListener('mouseenter', e => onCellHover(e, true));
@@ -528,11 +710,14 @@ function renderMap(){
   }
 
   for(let y=0;y<state.gridH;y++){ for(let x=0;x<state.gridW;x++){
-      const cellEl = queryCellEl(x,y); 
+      const cellEl = queryCellEl(x,y);
       if (!cellEl) continue;
       const cellData = cellAt(x,y);
       cellEl.className = 'cell border-t border-l border-black/20';
       if(cellData) {
+        // Limpiar clases de contenido antes de añadir nuevas
+        cellEl.classList.remove('door', 'trap', 'chest', 'boss-object', 'altar', 'libreria');
+
         switch(cellData.type) {
             case 'wall': cellEl.classList.add(`wall-${actStyle}`); break;
             case 'floor': cellEl.classList.add(`floor-${actStyle}`); break;
@@ -540,11 +725,14 @@ function renderMap(){
             case 'trap': cellEl.classList.add(`floor-${actStyle}`, 'trap'); break;
             case 'chest': cellEl.classList.add(`floor-${actStyle}`, 'chest'); break;
             case 'boss_object': cellEl.classList.add(`floor-${actStyle}`, 'boss-object'); break;
+            // MEJORA: Renderizado de nuevos objetos interactivos
+            case 'altar': cellEl.classList.add(`floor-${actStyle}`, 'altar'); cellEl.style.setProperty('--icon-content', `'${INTERACTIVE_OBJECTS.altar.icon}'`); break;
+            case 'libreria': cellEl.classList.add(`floor-${actStyle}`, 'libreria'); cellEl.style.setProperty('--icon-content', `'${INTERACTIVE_OBJECTS.libreria.icon}'`); break;
             default: cellEl.classList.add(`floor-${actStyle}`); break;
         }
         cellEl.classList.toggle('fog', state.fogEnabled && cellData.fog);
-        
-        if (cellData.type === 'chest' || cellData.type === 'door' || cellData.type === 'boss_object') {
+
+        if (['chest', 'door', 'boss_object', 'altar', 'libreria'].includes(cellData.type)) {
             const isAdjacentToHero = state.heroes.some(h => h.hp > 0 && h.pos && dist(h.pos, {x, y}) <= 1);
             if (isAdjacentToHero) cellEl.classList.add('interactable');
         }
@@ -552,7 +740,7 @@ function renderMap(){
 
       let tokenContainer = cellEl.querySelector('.token-container');
       if (!tokenContainer) { tokenContainer = document.createElement('div'); tokenContainer.className = 'token-container relative w-full h-full'; cellEl.appendChild(tokenContainer); }
-      
+
       const characterOnCell = tokenAt(x,y);
       const existingToken = tokenContainer.querySelector('.token');
 
@@ -567,14 +755,14 @@ function renderMap(){
           }
 
           tokenEl.dataset.id = characterOnCell.id;
-          
+
           let imageUrl = '';
           if (isHero) {
               imageUrl = HERO_PORTRAITS[characterOnCell.cls];
           } else {
               imageUrl = ENEMY_PORTRAITS[characterOnCell.kind];
           }
-      
+
           if (imageUrl) {
               tokenEl.style.backgroundImage = `url('${imageUrl}')`;
           } else {
@@ -589,7 +777,7 @@ function renderMap(){
           if (characterOnCell.isFurious) tokenEl.classList.add('boss-furious');
           if (characterOnCell.isInvulnerable) tokenEl.classList.add('boss-invulnerable');
           tokenEl.title = `${characterOnCell.name} (${isHero ? `NV ${characterOnCell.level}` : characterOnCell.tier})`;
-          
+
           tokenContainer.appendChild(tokenEl);
 
           const statusIconsContainer = document.createElement('div');
@@ -657,7 +845,7 @@ function renderHeroes(){
     const newCard = tpl.content.cloneNode(true);
     const card = newCard.querySelector('.rounded-lg'); card.dataset.id = `hero-${hero.id}`;
     const isCurrentTurn = isCombat && state.initOrder[state.turnIndex]?.kind === 'hero' && state.initOrder[state.turnIndex]?.id === hero.id;
-    
+
     card.querySelector('.hero-portrait').src = HERO_PORTRAITS[hero.cls];
     card.querySelector('.name').textContent = hero.name;
     card.querySelector('.class').textContent = CLASSES[hero.cls].name;
@@ -677,7 +865,7 @@ function renderHeroes(){
     card.querySelector('.btn-details').onclick = () => showHeroDetails(hero);
     card.querySelector('.btn-attrs').onclick = () => showAttributesPanel(hero);
     card.querySelector('.btn-bag').onclick = () => showInventoryPanel(hero);
-    
+
     let canMove = false, canAct = false;
     if (isCombat) {
         if (isCurrentTurn) {
@@ -688,35 +876,42 @@ function renderHeroes(){
         canMove = !hero.hasMoved;
         canAct = !hero.hasActed;
     }
-    
+
     btnMove.disabled = !canMove || hero.hp <= 0;
     btnAttack.disabled = !canAct || hero.hp <= 0;
     btnDefend.disabled = !canAct || hero.hp <= 0;
     btnRevive.disabled = !canAct || hero.hp <= 0 || !alliesDown;
     btnUndoMove.classList.toggle('hidden', !hero.hasMoved || hero.hasActed || !hero.canUndoMove);
-    
+
     const specialActionsContainer = card.querySelector('.special-actions');
     specialActionsContainer.innerHTML = '';
     hero.actions.forEach(action => {
-        const btn = document.createElement('button');
-        btn.className = 'bg-purple-700 hover:bg-purple-600 rounded px-2 py-1 text-xs transition-colors';
-        btn.textContent = `${action.name} (${action.cost || 0})`; btn.title = action.info; btn.onclick = () => useAbility(hero.id, action.key);
-        btn.disabled = !canAct || hero.hp <= 0;
-        btn.addEventListener('mouseenter', () => previewAbility(hero, action));
-        btn.addEventListener('mouseleave', clearHighlights);
-        specialActionsContainer.appendChild(btn);
+        // MEJORA: Comprobar el nivel requerido para la habilidad
+        const meetsLevelRequirement = !action.requiredLevel || hero.level >= action.requiredLevel;
+        if (meetsLevelRequirement) {
+            const btn = document.createElement('button');
+            btn.className = 'bg-purple-700 hover:bg-purple-600 rounded px-2 py-1 text-xs transition-colors';
+            if (action.requiredLevel) btn.classList.add('border-t-2', 'border-amber-400'); // Estilo para definitivas
+            btn.textContent = `${action.name} (${action.cost || 0})`; btn.title = action.info; btn.onclick = () => useAbility(hero.id, action.key);
+            btn.disabled = !canAct || hero.hp <= 0;
+            btn.addEventListener('mouseenter', () => previewAbility(hero, action));
+            btn.addEventListener('mouseleave', clearHighlights);
+            specialActionsContainer.appendChild(btn);
+        }
     });
-    
+
     let xpBar = card.querySelector('.xp-bar');
     if (!xpBar) {
       xpBar = document.createElement('div'); xpBar.className = 'w-full bg-slate-700 rounded-full h-2.5 mt-1 relative xp-bar';
       const fill = document.createElement('div'); fill.className = 'bg-amber-400 h-2.5 rounded-full absolute left-0 top-0';
-      fill.style.width = `${Math.min(100, (hero.xp / XP_TABLE[hero.level]) * 100)}%`;
+      const xpNeeded = XP_TABLE[hero.level] || Infinity;
+      fill.style.width = `${Math.min(100, (hero.xp / xpNeeded) * 100)}%`;
       xpBar.appendChild(fill); card.insertBefore(xpBar, card.querySelector('.action-buttons'));
     } else {
-      xpBar.firstChild.style.width = `${Math.min(100, (hero.xp / XP_TABLE[hero.level]) * 100)}%`;
+      const xpNeeded = XP_TABLE[hero.level] || Infinity;
+      xpBar.firstChild.style.width = `${Math.min(100, (hero.xp / xpNeeded) * 100)}%`;
     }
-    
+
     if (hero.hp <= 0) {
       card.style.opacity = '0.6';
       card.style.filter = 'grayscale(80%)';
@@ -729,7 +924,7 @@ function renderEnemies(){
   const panel = document.getElementById('enemiesList'); panel.innerHTML = '';
   const tpl = document.getElementById('tpl-enemy-card');
   state.enemies.forEach(e => {
-      const card = tpl.content.cloneNode(true); 
+      const card = tpl.content.cloneNode(true);
       const cardRoot = card.querySelector('.rounded-lg');
       cardRoot.dataset.id = `enemy-${e.id}`;
       card.querySelector('.enemy-portrait').src = ENEMY_PORTRAITS[e.kind];
@@ -752,13 +947,13 @@ function updateStatusPanel(text) { document.getElementById('statusPanel').textCo
 function addHero(name, clsKey){
   const cls = CLASSES[clsKey]; if(!name) name = cls.lore.name;
   const base = structuredClone(cls.base);
-  const h = { 
-      id: id(), name, cls: clsKey, level:1, xp: 0, 
-      hp: base.hp, hpmax: base.hp, ac: base.ac, speed: base.speed, 
-      res: base.res, resmax: base.res, resourceName: base.resourceName, 
+  const h = {
+      id: id(), name, cls: clsKey, level:1, xp: 0,
+      hp: base.hp, hpmax: base.hp, ac: base.ac, speed: base.speed,
+      res: base.res, resmax: base.res, resourceName: base.resourceName,
       attrs: base.attrs, pos: null, lastPos: null, buffs:[], conds:[], actions: cls.actions,
       attributePoints: 1,
-      inventory: [{ name: "Poción de Curación", type: "potion", effect: () => { h.hp = Math.min(h.hpmax, h.hp + 10); log(`${h.name} usa una poción y recupera 10 PV.`, 'heal'); renderUI(); } }],
+      inventory: [{...ITEM_DATABASE.HEALING_POTION, key: 'HEALING_POTION' }],
       hasMoved: false, hasActed: false,
       usedInmortalThisCombat: false,
       canUndoMove: true
@@ -767,13 +962,21 @@ function addHero(name, clsKey){
 }
 
 function levelUp(hero){
-  hero.level++; 
+  hero.level++;
   playSound('effect', 'levelUp');
   log(`<b>¡${hero.name} sube a nivel ${hero.level}! ¡Más poder para más caos!</b>`, 'game');
   hero.hpmax += dice.d(6) + getAttrMod(hero.attrs.CON);
   hero.hp = hero.hpmax; hero.resmax += 1; hero.res = hero.resmax;
   hero.attributePoints = (hero.attributePoints || 0) + 1;
   log(`<b>${hero.name} ha ganado un punto de atributo para gastar.</b>`, 'info');
+
+  if (hero.level === 5) {
+      const newAbility = hero.actions.find(a => a.requiredLevel === 5);
+      if (newAbility) {
+          log(`<b>¡${hero.name} ha aprendido una nueva habilidad: ${newAbility.name}!</b>`, 'game');
+      }
+  }
+
   renderUI();
 }
 
@@ -806,23 +1009,23 @@ function spawnEnemyAt(x,y, kind, tier){ const e = scaleEnemy(kind, tier); e.pos=
 }
 
 function killEnemy(e, killerHero){
-  log(`<b>${e.name}</b> ha sido derrotado.`, 'damage'); 
+  log(`<b>${e.name}</b> ha sido derrotado.`, 'damage');
   playSound('effect', 'death');
   showDeathEffect(e.pos.x, e.pos.y);
   state.enemies = state.enemies.filter(x=>x.id!==e.id);
-  state.heroes.forEach(h => { if(h.hp > 0) { h.xp += e.xp; log(`${h.name} gana ${e.xp} XP.`, 'info'); if(h.xp >= XP_TABLE[h.level]) levelUp(h); } });
-  
+  state.heroes.forEach(h => { if(h.hp > 0) { h.xp += e.xp; log(`${h.name} gana ${e.xp} XP.`, 'info'); if(XP_TABLE[h.level] && h.xp >= XP_TABLE[h.level]) levelUp(h); } });
+
   const oldTurnIndex = state.turnIndex;
   const removedUnitIndex = state.initOrder.findIndex(unit => unit.id === e.id);
   state.initOrder = state.initOrder.filter(unit => !(unit.kind === 'enemy' && unit.id === e.id));
-  
+
   if (removedUnitIndex !== -1 && removedUnitIndex < oldTurnIndex) {
       state.turnIndex--;
   }
   if (state.turnIndex >= state.initOrder.length) {
       state.turnIndex = state.initOrder.length - 1;
   }
-  
+
   const finishKillEnemy = () => {
     if (state.enemies.length === 0 && state.initOrder.length > 0) {
         log('<b>¡El último enemigo ha caído!</b> El combate ha terminado.', 'game');
@@ -835,14 +1038,14 @@ function killEnemy(e, killerHero){
         document.getElementById('currentTurn').textContent = '—';
         renderInitiative();
     }
-  
+
     const act = CAMPAIGN_ACTS[state.currentAct];
     if (act && e.kind === act.boss) {
         log(`<b>¡Has derrotado a ${e.name} y completado el ${act.title}!</b>`, 'game');
         setTimeout(() => setupAct(state.currentAct + 1), 3000);
     }
     renderUI();
-    
+
     advanceTutorial({ type: 'enemy_killed', enemy: e });
   };
 
@@ -861,17 +1064,17 @@ function setMoveMode(heroId) {
   const isCombat = state.initOrder.length > 0;
   if (isCombat) {
       const current = state.initOrder[state.turnIndex];
-      if (!current || current.kind !== 'hero' || current.id !== heroId) { 
-          updateStatusPanel('Solo puedes mover en tu turno de combate.'); 
-          return; 
+      if (!current || current.kind !== 'hero' || current.id !== heroId) {
+          updateStatusPanel('Solo puedes mover en tu turno de combate.');
+          return;
       }
   }
-  
+
   const reachable = findReachableCells(hero, hero.speed);
   highlightReachable(reachable);
   state.mode = { type: 'move', actorId: heroId, reachable };
   updateStatusPanel(`Mueve a ${hero.name}.`);
-  
+
   if (state.tutorial.active && state.tutorial.step === 0) {
       queryCellEl(state.tutorial.targetCell.x, state.tutorial.targetCell.y)?.classList.add('tutorial-highlight');
   }
@@ -919,46 +1122,53 @@ function setReviveMode(heroId) {
 
 function performBasicAttack(heroId, enemyId){
   const h = state.heroes.find(x=>x.id===heroId); const e = state.enemies.find(x=>x.id===enemyId); if(!h||!e) return;
-  
+
   h.hasActed = true; h.canUndoMove = false;
   playSound('voice', 'basic_attack', { char: h });
-  
+
   if (h.cls === 'GUERRERO') { h.res = Math.min(h.resmax, h.res + 1); log(`${h.name} gana 1 de Furia!`, 'info'); }
   if (e.isInvulnerable) { log(`<b>${e.name}</b> es invulnerable a los ataques!`, 'info'); renderUI(); return; }
   
-  const attackBonus = getAttrMod(h.attrs.STR);
-  let hit = atkRoll(h, attackBonus, e);
-
-  showRollResult({ roller: h.name, target: e.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(e), crit: hit.crit, fumble: hit.fumble });
-  
-  if(hit.fumble){ 
-    playSound('effect', 'miss');
-    log(`${h.name} pifia estrepitosamente.`, 'damage'); 
+  const guaranteedCrit = h.buffs.findIndex(b => b.key === 'guaranteed_crit');
+  let hit;
+  if(guaranteedCrit > -1) {
+      hit = { r: 20, total: 100, crit: true, fumble: false, finalBonus: 0 };
+      log(`<b>${h.name}</b> ataca desde las sombras con un golpe certero!`, 'crit');
+      h.buffs.splice(guaranteedCrit, 1);
+  } else {
+      const attackBonus = getAttrMod(h.attrs.STR);
+      hit = atkRoll(h, attackBonus, e);
+      showRollResult({ roller: h.name, target: e.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(e), crit: hit.crit, fumble: hit.fumble });
   }
-  else if(hit.crit){ 
+
+  if(hit.fumble){
+    playSound('effect', 'miss');
+    log(`${h.name} pifia estrepitosamente.`, 'damage');
+  }
+  else if(hit.crit){
       playSound('effect', 'crit');
-      const dmg = (dice.d(8) + getDamageBonus(h)) * 2; 
-      e.hp -= dmg; 
-      log(`<b>${h.name}</b> CRÍTICO (${hit.total}) a ${e.name}: ${dmg} daño!`, 'crit'); 
-      showFloatingText(e.pos.x, e.pos.y, dmg, '#f59e0b'); 
+      const dmg = (rollDamage("1d8", h) + getDamageBonus(h)) * 2;
+      e.hp -= dmg;
+      log(`<b>${h.name}</b> CRÍTICO (${hit.total}) a ${e.name}: ${dmg} daño!`, 'crit');
+      showFloatingText(e.pos.x, e.pos.y, dmg, '#f59e0b');
       showDamageEffect(e.pos.x, e.pos.y, '#f59e0b', e, true);
       playEffect(e.pos.x, e.pos.y, 'physical-hit');
   }
-  else if(hit.total >= effectiveAC(e)){ 
+  else if(hit.total >= effectiveAC(e)){
       playSound('effect', 'hit');
-      const dmg = dice.d(8) + getDamageBonus(h); 
-      e.hp -= dmg; 
-      log(`${h.name} impacta (${hit.total}) a ${e.name}: ${dmg} daño.`, 'damage'); 
-      showFloatingText(e.pos.x, e.pos.y, dmg, '#ffffff'); 
+      const dmg = rollDamage("1d8", h) + getDamageBonus(h);
+      e.hp -= dmg;
+      log(`${h.name} impacta (${hit.total}) a ${e.name}: ${dmg} daño.`, 'damage');
+      showFloatingText(e.pos.x, e.pos.y, dmg, '#ffffff');
       showDamageEffect(e.pos.x, e.pos.y, '#ffffff', e);
       playEffect(e.pos.x, e.pos.y, 'physical-hit');
   }
-  else { 
+  else {
     playSound('effect', 'miss');
-    log(`${h.name} falla (${hit.total}).`, 'info'); 
-    showFloatingText(e.pos.x, e.pos.y, 'Falla', '#9ca3af'); 
+    log(`${h.name} falla (${hit.total}).`, 'info');
+    showFloatingText(e.pos.x, e.pos.y, 'Falla', '#9ca3af');
   }
-  
+
   if (e.hp <= 0) killEnemy(e, h); else checkBossMechanics(e);
   state.mode = { type: 'none' }; clearHighlights(); renderUI();
   advanceTutorial({ type: 'attack', success: hit.total >= effectiveAC(e), ability: { key: 'basic_attack' } });
@@ -968,7 +1178,7 @@ function defendAction(heroId) {
   if (state.isAnimating) return;
   const hero = state.heroes.find(h => h.id === heroId);
   if (!hero) return;
-  
+
   let canAct = false;
   const isCombat = state.initOrder.length > 0;
   if(isCombat) canAct = !hero.hasActed && state.initOrder[state.turnIndex]?.id === hero.id;
@@ -999,7 +1209,7 @@ function useAbility(heroId, key){
   if (state.isAnimating) return;
   playSound('effect', 'click');
   const h = state.heroes.find(x=>x.id===heroId); if(!h) return;
-  
+
   let canAct = false;
   const isCombat = state.initOrder.length > 0;
   if(isCombat) canAct = !h.hasActed && state.initOrder[state.turnIndex]?.id === h.id;
@@ -1009,21 +1219,26 @@ function useAbility(heroId, key){
   const ability = h.actions.find(a=>a.key===key);
   if(!ability){ log('Habilidad no encontrada.', 'info'); return; }
   if(h.res < (ability.cost||0)){ log('No tienes recursos suficientes.', 'info'); return; }
-  
+
   playSound('voice', key, { char: h });
-  
+
   if (ability.range === 0) {
       ability.use({ self: h, ability });
   } else {
-      if (ability.radius !== undefined) { 
-          state.mode = { type: 'ability-aoe', actorId: heroId, ability: ability }; 
-          updateStatusPanel(`${h.name} prepara ${ability.name}. Selecciona el centro del área.`); 
+      const context = { self: h, ability };
+      if (ability.key === "acto_desaparicion") { // Caso especial para teleport
+          ability.use(context);
+          return;
+      }
+      if (ability.radius !== undefined) {
+          state.mode = { type: 'ability-aoe', actorId: heroId, ability: ability };
+          updateStatusPanel(`${h.name} prepara ${ability.name}. Selecciona el centro del área.`);
       } else if (ability.range > 0) {
-          const targetType = ability.key.includes('curar') || ability.key.includes('divina') ? 'hero' : 'enemy'; 
-          state.mode = { type: 'ability-target', actorId: heroId, ability: ability, targetType: targetType }; 
-          highlightTargets(h, ability.range, targetType); 
+          const targetType = ability.key.includes('curar') || ability.key.includes('divina') ? 'hero' : 'enemy';
+          state.mode = { type: 'ability-target', actorId: heroId, ability: ability, targetType: targetType };
+          highlightTargets(h, ability.range, targetType);
           updateAdvantageIndicators(h);
-          updateStatusPanel(`${h.name} prepara ${ability.name}. Selecciona un objetivo.`); 
+          updateStatusPanel(`${h.name} prepara ${ability.name}. Selecciona un objetivo.`);
       }
   }
   renderUI();
@@ -1034,15 +1249,15 @@ function rollInitiative(){
   if (state.initOrder.length > 0 || state.enemies.length === 0) return;
   const order=[];
   for(const h of state.heroes){ if(h.hp > 0 && h.pos) order.push({kind:'hero', id:h.id, name:h.name, roll: dice.d(20)+ getAttrMod(h.attrs.DEX)}); }
-  for(const e of state.enemies){ 
+  for(const e of state.enemies){
       const initBonus = ENEMIES[e.kind].base.initBonus || 1;
-      order.push({kind:'enemy', id:e.id, name:e.name, roll: dice.d(20) + initBonus}); 
+      order.push({kind:'enemy', id:e.id, name:e.name, roll: dice.d(20) + initBonus});
   }
   order.sort((a,b)=> b.roll-a.roll);
   state.initOrder = order;
   state.initialInitiative = structuredClone(order);
-  state.turnIndex = -1; 
-  state.round = 0; 
+  state.turnIndex = -1;
+  state.round = 0;
   log('¡Enemigos a la vista! <b>¡Que comience el caos!</b>', 'game');
   updateStatusPanel("¡Combate iniciado!");
   nextTurn();
@@ -1057,13 +1272,13 @@ function renderInitiative(){
 function processTurn(){
   if (state.gameOver) return;
   const current = state.initOrder[state.turnIndex];
-  if (!current) return; 
-  
+  if (!current) return;
+
   if (current.kind === 'hero') {
       const hero = state.heroes.find(h => h.id === current.id);
-      if (hero) { 
-          hero.hasMoved = false; 
-          hero.hasActed = false; 
+      if (hero) {
+          hero.hasMoved = false;
+          hero.hasActed = false;
           hero.lastPos = {...hero.pos};
           hero.canUndoMove = true;
       }
@@ -1074,6 +1289,7 @@ function processTurn(){
   if(current.kind==='enemy') { enemyAI(current.id); }
 }
 
+// MEJORA: Añadido chequeo de eventos aleatorios
 function nextTurn(){
   if (state.isAnimating) return;
   const isCombat = state.initOrder.length > 0;
@@ -1087,9 +1303,9 @@ function nextTurn(){
               char.conds = char.conds.filter(c => --c.rounds > 0);
           }
       }
-      state.turnIndex++; 
-      if(state.turnIndex >= state.initOrder.length){ 
-          state.turnIndex = 0; 
+      state.turnIndex++;
+      if(state.turnIndex >= state.initOrder.length){
+          state.turnIndex = 0;
           state.round++;
           log(`Comienza la Ronda ${state.round}.`, 'game');
           if (state.revivedThisRound.length > 0) {
@@ -1099,12 +1315,13 @@ function nextTurn(){
               state.revivedThisRound = [];
           }
       }
-      renderInitiative(); 
+      renderInitiative();
       processTurn();
   } else {
       log("Turno de exploración del grupo.");
       state.round++;
       document.getElementById('roundCounter').textContent = state.round;
+      checkRandomEvent(); // <-- LLAMADA A LA NUEVA FUNCIÓN
       state.heroes.forEach(h => {
           if (h.hp > 0) {
               h.hasMoved = false;
@@ -1117,6 +1334,18 @@ function nextTurn(){
       renderUI();
   }
 }
+
+// MEJORA: Nueva función para gestionar eventos aleatorios
+function checkRandomEvent() {
+    if (dice.d(10) === 1) { // 10% de probabilidad
+        const event = RANDOM_EVENTS[RNG(RANDOM_EVENTS.length)];
+        const activeHero = state.heroes.find(h => h.hp > 0) || state.heroes[0]; // Elige un héroe para el contexto
+        log(`<b>${event.title}</b>: ${event.description(activeHero)}`, 'game');
+        event.effect(activeHero);
+        renderUI();
+    }
+}
+
 
 const ENEMY_SPECIAL_ABILITIES = {
   'form': { desc: 'Puede paralizar con burocracia.', execute: (e, target) => { if (dist(e.pos, target.pos) <= 5 && RNG(2) === 0) { log(`El ${e.name} te presenta el Formulario 27B/6.`); target.conds.push({key: 'stun', rounds: 2, desc: 'Paralizado'}); log(`<b>${target.name}</b> queda paralizado.`, 'damage'); return true; } return false; } },
@@ -1143,24 +1372,36 @@ const ENEMY_SPECIAL_ABILITIES = {
 
 function enemyAI(enemyId){
   const e = state.enemies.find(x=>x.id===enemyId); if(!e || e.hp <= 0) { nextTurn(); return; }
-  
-  let potentialTargets = state.heroes.filter(h => h.hp > 0 && h.pos)
-    .map(h => {
-      let score = 0;
-      score += (h.hpmax - h.hp) * 1.5;
-      score -= dist(e.pos, h.pos);
-      if(h.cls === 'MAGO') score += 10;
-      if(h.cls === 'CLERIGO') score += 8;
-      if(h.cls === 'PICARO') score += 5;
-      return { hero: h, score: score };
-    })
-    .sort((a,b) => b.score - a.score);
+
+  const taunt = (e.conds || []).find(c => c.key === 'taunted');
+  let potentialTargets;
+
+  if (taunt) {
+      const taunter = state.heroes.find(h => h.id === taunt.targetId);
+      if (taunter && taunter.hp > 0) {
+          potentialTargets = [{ hero: taunter, score: 999 }];
+      }
+  }
+
+  if (!potentialTargets) {
+    potentialTargets = state.heroes.filter(h => h.hp > 0 && h.pos)
+      .map(h => {
+        let score = 0;
+        score += (h.hpmax - h.hp) * 1.5;
+        score -= dist(e.pos, h.pos);
+        if(h.cls === 'MAGO') score += 10;
+        if(h.cls === 'CLERIGO') score += 8;
+        if(h.cls === 'PICARO') score += 5;
+        return { hero: h, score: score };
+      })
+      .sort((a,b) => b.score - a.score);
+  }
 
   if(potentialTargets.length === 0){ nextTurn(); return; }
   let target = potentialTargets[0].hero;
 
   showAiIntent(e, target);
-  
+
   setTimeout(() => {
       const currentDist = dist(e.pos, target.pos);
       if(currentDist > 1){
@@ -1171,8 +1412,8 @@ function enemyAI(enemyId){
               const d = dist({x,y}, target.pos);
               const hasC = hasCover({pos:{x,y}}, target);
               if ((hasC && !bestCover) || (hasC && bestCover && d < closestDist) || (!hasC && !bestCover && d < closestDist)) {
-                  closestDist = d; 
-                  bestMove = {x,y}; 
+                  closestDist = d;
+                  bestMove = {x,y};
                   bestCover = hasC;
               }
           }
@@ -1197,31 +1438,31 @@ function performAIAttack(e, target) {
         else {
             let hit = atkRoll(e, e.attack, target);
             showRollResult({ roller: e.name, target: target.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(target), crit: hit.crit, fumble: hit.fumble });
-    if(hit.crit){ 
+    if(hit.crit){
         playSound('effect', 'crit');
-        let d = rollDamage(e.dmg) * 2;
+        let d = rollDamage(e.dmg, e) * 2;
         target.hp -= d;
-        log(`<b>${e.name}</b> CRITICA a ${target.name}: ${d}`, 'crit'); 
-        showFloatingText(target.pos.x, target.pos.y, d, '#f59e0b'); 
-        showDamageEffect(target.pos.x, target.pos.y, '#f59e0b', target, true); 
+        log(`<b>${e.name}</b> CRITICA a ${target.name}: ${d}`, 'crit');
+        showFloatingText(target.pos.x, target.pos.y, d, '#f59e0b');
+        showDamageEffect(target.pos.x, target.pos.y, '#f59e0b', target, true);
         playEffect(target.pos.x, target.pos.y, 'physical-hit');
     }
-else if(hit.total >= effectiveAC(target)){ 
+else if(hit.total >= effectiveAC(target)){
     playSound('effect', 'hit');
-    let d = rollDamage(e.dmg);
+    let d = rollDamage(e.dmg, e);
     target.hp -= d;
-    log(`${e.name} golpea a ${target.name}: ${d}`, 'damage'); 
-    showFloatingText(target.pos.x, target.pos.y, d, '#ffffff'); 
+    log(`${e.name} golpea a ${target.name}: ${d}`, 'damage');
+    showFloatingText(target.pos.x, target.pos.y, d, '#ffffff');
     showDamageEffect(target.pos.x, target.pos.y, '#ffffff', target);
     playEffect(target.pos.x, target.pos.y, 'physical-hit');
 }
 
-            else { 
+            else {
               playSound('effect', 'miss');
-              log(`${e.name} falla.`); 
-              showFloatingText(target.pos.x, target.pos.y, 'Falla', '#9ca3af'); 
+              log(`${e.name} falla.`);
+              showFloatingText(target.pos.x, target.pos.y, 'Falla', '#9ca3af');
             }
-            
+
             if(target.cls === 'GUERRERO') { target.res = Math.min(target.resmax, target.res + 1); log(`${target.name} gana 1 de Furia al ser golpeado!`, 'info'); }
         }
 
@@ -1233,7 +1474,7 @@ else if(hit.total >= effectiveAC(target)){
     } else {
         log(`${e.name} no puede alcanzar a su objetivo y espera.`, 'info');
     }
-    
+
     renderUI();
     if (e.special === 'joke') { e.attack = ENEMIES[e.kind].base.attack + Math.floor((e.level-1)/2); }
     nextTurn();
@@ -1270,7 +1511,7 @@ function checkBossMechanics(boss) {
 
       actor.hasActed = true;
       actor.canUndoMove = false;
-      
+
       actor.res -= (ability.cost || 0);
       log(`<b>${actor.name}</b> usa <b>${ability.name}</b> sobre <b>${target.name}</b>!`, 'info');
       let bonus = getDamageBonus(actor);
@@ -1283,37 +1524,37 @@ function checkBossMechanics(boss) {
               const hit = atkRoll(actor, getAttrMod(actor.attrs.STR), target);
               success = hit.total >= effectiveAC(target);
               showRollResult({ roller: actor.name, target: target.name, roll: hit.r, bonus: hit.finalBonus, total: hit.total, targetAC: effectiveAC(target), crit: hit.crit, fumble: hit.fumble });
-              if (success) { 
-                  let totalDmg = dice.d(8) + bonus + (ability.opts.extraDamage || 0);
+              if (success) {
+                  let totalDmg = rollDamage("1d8", actor) + bonus + (ability.opts.extraDamage || 0);
                   if (ability.opts.requireAllyAdj) {
                       const isAllyAdjacent = state.heroes.some(h => h.id !== actor.id && h.hp > 0 && h.pos && dist(h.pos, target.pos) <= 1);
                       if (isAllyAdjacent) {
                           log(`¡Ataque Furtivo! Un aliado distrae al objetivo.`);
-                          if (ability.opts.extraDmgN) { 
-                              for(let i = 0; i < ability.opts.extraDmgN; i++) totalDmg += dice.d(ability.opts.extraDmgS); 
+                          if (ability.opts.extraDmgN) {
+                              for(let i = 0; i < ability.opts.extraDmgN; i++) totalDmg += dice.d(ability.opts.extraDmgS);
                           }
                       }
                   }
-                  target.hp -= totalDmg; 
-                  log(`Impacta, causando ${totalDmg} de daño.`, 'damage'); 
-                  showFloatingText(target.pos.x, target.pos.y, totalDmg, '#ffffff'); 
+                  target.hp -= totalDmg;
+                  log(`Impacta, causando ${totalDmg} de daño.`, 'damage');
+                  showFloatingText(target.pos.x, target.pos.y, totalDmg, '#ffffff');
                   showDamageEffect(target.pos.x, target.pos.y, '#ffffff', target, hit.crit);
                   playEffect(target.pos.x, target.pos.y, 'physical-hit');
               } else { log('Falla miserablemente.'); }
               break;
           case 'autoDamage':
-              let totalDmg = bonus; for(let i = 0; i < ability.opts.dmgN; i++) totalDmg += dice.d(ability.opts.dmgS); target.hp -= totalDmg; log(`El hechizo impacta, causando ${totalDmg} de daño.`, 'damage'); showFloatingText(target.pos.x, target.pos.y, totalDmg, '#818cf8'); 
+              let totalDmg = bonus; for(let i = 0; i < ability.opts.dmgN; i++) totalDmg += dice.d(ability.opts.dmgS); target.hp -= totalDmg; log(`El hechizo impacta, causando ${totalDmg} de daño.`, 'damage'); showFloatingText(target.pos.x, target.pos.y, totalDmg, '#818cf8');
               playEffect(target.pos.x, target.pos.y, 'arcane-hit');
               if (ability.opts.effect === 'confused') { target.conds.push({ key: 'confused', rounds: 2, desc: 'Confuso' }); log(`${target.name} queda confundido.`, 'damage'); }
               success = true;
               break;
           case 'heal':
-              let totalHeal = getAttrMod(actor.attrs.WIS); for(let i = 0; i < ability.opts.dmgN; i++) totalHeal += dice.d(ability.opts.dmgS); target.hp = Math.min(target.hpmax, target.hp + totalHeal); log(`${target.name} recupera ${totalHeal} PV.`, 'heal'); 
+              let totalHeal = getAttrMod(actor.attrs.WIS); for(let i = 0; i < ability.opts.dmgN; i++) totalHeal += dice.d(ability.opts.dmgS); target.hp = Math.min(target.hpmax, target.hp + totalHeal); log(`${target.name} recupera ${totalHeal} PV.`, 'heal');
               showFloatingText(target.pos.x, target.pos.y, `+${totalHeal}`, '#22c55e');
               playEffect(target.pos.x, target.pos.y, 'heal');
-              if (ability.opts.buff) { 
-                target.buffs.push(ability.opts.buff); 
-                log(`${target.name} se siente fortalecido!`, 'heal'); 
+              if (ability.opts.buff) {
+                target.buffs.push(ability.opts.buff);
+                log(`${target.name} se siente fortalecido!`, 'heal');
                 playEffect(target.pos.x, target.pos.y, 'divine');
               }
               success = true;
@@ -1324,7 +1565,7 @@ function checkBossMechanics(boss) {
                   const stolenBuff = target.buffs.splice(stolenIndex, 1)[0];
                   actor.buffs.push(stolenBuff); log(`¡${actor.name} roba el efecto '${stolenBuff.desc}' de ${target.name}!`, 'info');
               } else { const dmg = dice.d(6) + getAttrMod(actor.attrs.DEX); target.hp -= dmg; log(`No había nada que robar, así que le da un coscorrón por ${dmg} de daño.`, 'damage'); showFloatingText(target.pos.x, target.pos.y, dmg, '#eab308'); showDamageEffect(target.pos.x, target.pos.y, '#eab308', target); }
-              success = true; 
+              success = true;
               playEffect(target.pos.x, target.pos.y, 'steal');
               break;
       }
@@ -1332,15 +1573,16 @@ function checkBossMechanics(boss) {
       state.mode = { type: 'none' }; clearHighlights(); renderUI();
       advanceTutorial({ type: 'ability', success, ability });
   }
-  
-  function performAbilityAOE(actorId, center, ability) {
-      const actor = state.heroes.find(h => h.id === actorId); if (!actor) return;
-      actor.hasActed = true;
-      actor.canUndoMove = false;
 
-      actor.res -= (ability.cost || 0);
+  function performAbilityAOE(actorId, center, ability, fromItem = false) {
+      const actor = state.heroes.find(h => h.id === actorId); if (!actor) return;
+      if (!fromItem) {
+          actor.hasActed = true;
+          actor.canUndoMove = false;
+          actor.res -= (ability.cost || 0);
+      }
       log(`<b>${actor.name}</b> desata <b>${ability.name}</b> en {${center.x}, ${center.y}}!`, 'crit');
-      
+
       let enemiesHit = 0;
       state.enemies.forEach(e => {
           if (e.hp > 0 && e.pos && dist(e.pos, center) <= ability.opts.radius) {
@@ -1349,7 +1591,7 @@ function checkBossMechanics(boss) {
               let totalDmg = getDamageBonus(actor); for(let i = 0; i < ability.opts.dmgN; i++) totalDmg += dice.d(ability.opts.dmgS);
               e.hp -= totalDmg;
               log(`${e.name} es alcanzado, sufriendo ${totalDmg} de daño.`, 'damage');
-              showFloatingText(e.pos.x, e.pos.y, totalDmg, '#f97316'); 
+              showFloatingText(e.pos.x, e.pos.y, totalDmg, '#f97316');
               playEffect(e.pos.x, e.pos.y, 'physical-hit');
               if (ability.opts.effect === 'confused') { e.conds.push({key: 'confused', rounds: 2, desc: 'Confuso'}); log(`${e.name} parece muy confundido.`, 'damage'); }
               if (e.hp <= 0) killEnemy(e, actor); else checkBossMechanics(e);
@@ -1385,10 +1627,10 @@ function animateAndMoveToken(character, newPos, onComplete) {
     setTimeout(() => {
         tokenEl.style.transition = 'none';
         tokenEl.style.transform = '';
-        
+
         character.pos = newPos;
-        
-        renderMap(); 
+
+        renderMap();
 
         setTimeout(() => {
             const freshTokenEl = document.querySelector(`.token[data-id="${character.id}"]`);
@@ -1400,7 +1642,7 @@ function animateAndMoveToken(character, newPos, onComplete) {
     }, 300);
 }
 
-function findReachableCells(actor, maxDist) {
+function findReachableCells(actor, maxDist, isTeleport = false) {
     const startPos = actor.pos;
     if (!startPos) return {};
     const reachable = {};
@@ -1417,17 +1659,27 @@ function findReachableCells(actor, maxDist) {
             const neighbor = { x: pos.x + n[0], y: pos.y + n[1] };
             const neighborKey = `${neighbor.x},${neighbor.y}`;
 
-            if (inBounds(neighbor.x, neighbor.y) && !visited.has(neighborKey) && isPassable(neighbor.x, neighbor.y)) {
-                visited.add(neighborKey);
-                const tokenOnCell = tokenAt(neighbor.x, neighbor.y);
-                
-                if (!tokenOnCell || tokenOnCell.hp <= 0) {
-                    reachable[neighborKey] = cost + 1;
-                    queue.push({ pos: neighbor, cost: cost + 1 });
-                } else {
-                    const isTokenHero = !!tokenOnCell.cls;
-                    if (isActorHero === isTokenHero) {
+            if (inBounds(neighbor.x, neighbor.y) && !visited.has(neighborKey)) {
+                if (isTeleport) { // Para teleport, solo importa que la celda destino sea pasable
+                    if (isPassable(neighbor.x, neighbor.y, true)) {
+                        visited.add(neighborKey);
+                        reachable[neighborKey] = cost + 1;
                         queue.push({ pos: neighbor, cost: cost + 1 });
+                    }
+                } else { // Lógica de movimiento normal
+                    if (isPassable(neighbor.x, neighbor.y)) {
+                        visited.add(neighborKey);
+                        const tokenOnCell = tokenAt(neighbor.x, neighbor.y);
+
+                        if (!tokenOnCell || tokenOnCell.hp <= 0) {
+                            reachable[neighborKey] = cost + 1;
+                            queue.push({ pos: neighbor, cost: cost + 1 });
+                        } else {
+                            const isTokenHero = !!tokenOnCell.cls;
+                            if (isActorHero === isTokenHero) {
+                                queue.push({ pos: neighbor, cost: cost + 1 });
+                            }
+                        }
                     }
                 }
             }
@@ -1457,12 +1709,12 @@ function onCellClick(e) {
     const mode = state.mode;
 
     if (state.dmMode) {
-        if (mode.type === 'spawn-enemy') { 
-            spawnEnemyAt(x, y, mode.kind, mode.tier); 
-            state.mode = { type: 'none' }; 
+        if (mode.type === 'spawn-enemy') {
+            spawnEnemyAt(x, y, mode.kind, mode.tier);
+            state.mode = { type: 'none' };
             log(`Invocado: ${ENEMIES[mode.kind].name} en [${x},${y}]`);
             if (state.initOrder.length === 0) rollInitiative();
-            return; 
+            return;
         }
         const cell = cellAt(x,y); if(cell) { cell.type = state.dmTool; log(`Pintado: ${state.dmTool} en [${x},${y}]`); }
         renderMap(); return;
@@ -1474,9 +1726,9 @@ function onCellClick(e) {
             playSound('effect', 'click');
             hero.hasMoved = true;
             const enemiesBeforeMove = state.enemies.filter(en => en.pos && !cellAt(en.pos.x, en.pos.y).fog).length;
-            
+
             animateAndMoveToken(hero, {x, y}, () => {
-                revealAround(x,y,5); 
+                revealAround(x,y,5);
                 const enemiesAfterMove = state.enemies.filter(en => en.pos && !cellAt(en.pos.x, en.pos.y).fog).length;
                 if (enemiesAfterMove > enemiesBeforeMove) {
                     log("¡Has revelado nuevos enemigos! No puedes deshacer este movimiento.", 'info');
@@ -1486,13 +1738,13 @@ function onCellClick(e) {
                 const isCombat = state.initOrder.length > 0;
                 if (!isCombat && enemiesAfterMove > 0 && !state.tutorial.active) {
                     rollInitiative();
-                    hero.hasActed = true; 
+                    hero.hasActed = true;
                 }
                 renderUI();
-                
+
                 advanceTutorial({ type: 'move', hero });
             });
-            clearHighlights(); 
+            clearHighlights();
             state.mode = {type: 'none'};
         }
     } else if(mode.type==='attack'){
@@ -1500,9 +1752,9 @@ function onCellClick(e) {
         if(!target){ log('Apuntas a la nada.'); return; }
         if (target.kind) performBasicAttack(mode.actorId, target.id);
         else if (target.name === 'Cláusula Abusiva') {
-            const hero = state.heroes.find(h => h.id === mode.actorId); 
+            const hero = state.heroes.find(h => h.id === mode.actorId);
             hero.hasActed = true; hero.canUndoMove = false;
-            log(`${hero.name} ataca la ${target.name}!`); target.hp -= dice.d(8) + getDamageBonus(hero);
+            log(`${hero.name} ataca la ${target.name}!`); target.hp -= rollDamage("1d8", hero) + getDamageBonus(hero);
             if (target.hp <= 0) {
                 log(`¡Una ${target.name} ha sido destruida!`, 'game'); state.bossObjects = state.bossObjects.filter(o => o.id !== target.id); cellAt(x,y).type = 'floor';
                 const demon = state.enemies.find(e => e.kind === 'DEMONIO_FINANZAS');
@@ -1529,25 +1781,43 @@ function onCellClick(e) {
             log('No hay un aliado caído válido en esa casilla.');
         }
 
-} else if (mode.type === 'ability-target') {
-    const target = (mode.targetType === 'hero' ? state.heroes : state.enemies).find(t => t.pos && t.pos.x === x && t.pos.y === y);
-    if (!target) { 
-        log('No hay un objetivo válido ahí.'); 
-        return; 
+    } else if (mode.type === 'ability-target') {
+        const target = (mode.targetType === 'hero' ? state.heroes : state.enemies).find(t => t.pos && t.pos.x === x && t.pos.y === y);
+        if (!target) {
+            log('No hay un objetivo válido ahí.');
+            return;
+        }
+        const actor = state.heroes.find(h => h.id === mode.actorId);
+        if (actor && mode.ability.use) {
+            const context = { self: actor, ability: mode.ability };
+            mode.ability.use(context, target);
+        } else {
+            log('Error: La habilidad no se pudo ejecutar.', 'damage');
+        }
+    } else if (mode.type === 'ability-aoe') {
+        performAbilityAOE(mode.actorId, {x, y}, mode.ability);
+    } else if (mode.type === 'item-aoe') {
+        performAbilityAOE(mode.actorId, {x, y}, mode.ability, true);
+    } else if (mode.type === 'item-teleport') {
+        const hero = state.heroes.find(h => h.id === mode.actorId);
+        const reachable = findReachableCells(hero, mode.range, true);
+        if (hero && reachable[`${x},${y}`]) {
+            if (mode.fromAbility) { // Si viene de una habilidad como la del Pícaro
+                hero.res -= mode.cost;
+                hero.hasActed = true;
+            }
+            animateAndMoveToken(hero, {x,y}, () => {
+                log(`${hero.name} aparece en una nueva posición.`, 'info');
+                revealAround(x,y,5);
+                state.mode = { type: 'none' };
+                clearHighlights();
+                renderUI();
+            });
+        }
+    } else if (mode.type === 'none') {
+        const adjacentHero = state.heroes.find(h => h.hp > 0 && h.pos && dist(h.pos, {x, y}) <= 1);
+        if (adjacentHero) interactWithCell(adjacentHero, x, y);
     }
-    const actor = state.heroes.find(h => h.id === mode.actorId);
-    if (actor && mode.ability.use) {
-        const context = { self: actor, ability: mode.ability };
-        mode.ability.use(context, target);
-    } else {
-        log('Error: La habilidad no se pudo ejecutar.', 'damage');
-    }
-} else if (mode.type === 'ability-aoe') {
-    performAbilityAOE(mode.actorId, {x, y}, mode.ability);
-} else if (mode.type === 'none') { 
-    const adjacentHero = state.heroes.find(h => h.hp > 0 && h.pos && dist(h.pos, {x, y}) <= 1); 
-    if (adjacentHero) interactWithCell(adjacentHero, x, y); 
-}
 }
 
 
@@ -1564,12 +1834,30 @@ function triggerCellEffects(hero, x, y) {
 
 function interactWithCell(hero, x, y) {
     const cell = cellAt(x, y);
-    if (cell.type === 'chest') { 
+    if (cell.type === 'chest') {
         playSound('effect', 'click');
-        log(`<b>${hero.name}</b> abre un cofre.`, 'info'); 
-        hero.inventory.push({ name: "Poción de Curación", type: "potion", effect: () => { hero.hp = Math.min(hero.hpmax, hero.hp + 10); log(`${hero.name} usa una poción y recupera 10 PV.`, 'heal'); renderUI(); } }); 
-        log("¡Ha encontrado una Poción de Curación!", 'heal'); cell.type = 'floor'; renderUI(); 
-    } else if (cell.type === 'door') { playSound('effect', 'click'); log(`${hero.name} examina la puerta.`); }
+        log(`<b>${hero.name}</b> abre un cofre.`, 'info');
+        const itemKeys = Object.keys(ITEM_DATABASE);
+        const randomItemKey = itemKeys[RNG(itemKeys.length)];
+        const newItem = { ...ITEM_DATABASE[randomItemKey], key: randomItemKey };
+        hero.inventory.push(newItem);
+        log(`¡Ha encontrado un objeto: ${newItem.name}!`, 'game');
+        cell.type = 'floor'; renderUI();
+    } else if (cell.type === 'door') {
+        playSound('effect', 'click'); log(`${hero.name} examina la puerta.`);
+    // MEJORA: Lógica de interacción con nuevos objetos
+    } else if (cell.type === 'altar' || cell.type === 'libreria') {
+        const objectData = INTERACTIVE_OBJECTS[cell.type];
+        const dialog = objectData.dialogs[RNG(objectData.dialogs.length)];
+        const modalContent = document.getElementById('modalContent');
+        modalContent.innerHTML = `<button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl">&times;</button>
+        <div class="text-center p-4">
+            <div class="text-5xl mb-4">${objectData.icon}</div>
+            <p class="text-slate-300 leading-relaxed">${dialog}</p>
+        </div>`;
+        modalContent.querySelector('#closeModalBtn').onclick = closeModal;
+        openModal();
+    }
 }
 
 function playEffect(x, y, effectType) {
@@ -1578,9 +1866,9 @@ function playEffect(x, y, effectType) {
 
     const effectEl = document.createElement('div');
     effectEl.className = `effect-overlay effect-${effectType}`;
-    
+
     cell.appendChild(effectEl);
-    
+
     setTimeout(() => effectEl.remove(), 800);
 }
 
@@ -1604,7 +1892,8 @@ function closeModal() { document.getElementById('heroModal').classList.add('opac
 
 function showHeroDetails(hero) {
   const lore = CLASSES[hero.cls].lore; const modalContent = document.getElementById('modalContent');
-  modalContent.innerHTML = `<button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl">&times;</button><div class="flex flex-col md:flex-row gap-6"><div class="md:w-1/3 flex-shrink-0"><img src="${HERO_PORTRAITS[hero.cls]}" class="w-full h-auto rounded-lg" alt="Retrato de ${lore.name}"></div><div class="md:w-2/3"><h2 class="text-3xl font-bold font-title text-amber-300">${lore.name}</h2><h3 class="text-lg text-slate-300 font-title -mt-1">${CLASSES[hero.cls].name}</h3><p class="text-sm mt-4 leading-relaxed">${lore.history}</p><div class="mt-4"><h4 class="font-semibold text-slate-300">Atributos Clave</h4><p class="text-sm mt-1">Nivel: ${hero.level} | XP: ${hero.xp}/${XP_TABLE[hero.level]} | ${Object.entries(hero.attrs).map(([k,v])=>`${k}: ${v} (${getAttrMod(v) >= 0 ? '+' : ''}${getAttrMod(v)})`).join(' | ')}</p></div></div></div><div class="mt-6"><h3 class="text-xl font-bold font-title text-center">Habilidades</h3><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">${hero.actions.map(action => `<div class="bg-slate-700 p-3 rounded-lg"><h5 class="font-semibold text-amber-200">${action.name}</h5><p class="text-xs mt-1">${action.info}</p></div>`).join('')}</div></div>`;
+  const xpNeeded = XP_TABLE[hero.level] || 'MAX';
+  modalContent.innerHTML = `<button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl">&times;</button><div class="flex flex-col md:flex-row gap-6"><div class="md:w-1/3 flex-shrink-0"><img src="${HERO_PORTRAITS[hero.cls]}" class="w-full h-auto rounded-lg" alt="Retrato de ${lore.name}"></div><div class="md:w-2/3"><h2 class="text-3xl font-bold font-title text-amber-300">${lore.name}</h2><h3 class="text-lg text-slate-300 font-title -mt-1">${CLASSES[hero.cls].name}</h3><p class="text-sm mt-4 leading-relaxed">${lore.history}</p><div class="mt-4"><h4 class="font-semibold text-slate-300">Atributos Clave</h4><p class="text-sm mt-1">Nivel: ${hero.level} | XP: ${hero.xp}/${xpNeeded} | ${Object.entries(hero.attrs).map(([k,v])=>`${k}: ${v} (${getAttrMod(v) >= 0 ? '+' : ''}${getAttrMod(v)})`).join(' | ')}</p></div></div></div><div class="mt-6"><h3 class="text-xl font-bold font-title text-center">Habilidades</h3><div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">${hero.actions.map(action => `<div class="bg-slate-700 p-3 rounded-lg ${!action.requiredLevel || hero.level >= action.requiredLevel ? '' : 'opacity-50'}"><h5 class="font-semibold text-amber-200">${action.name} ${action.requiredLevel ? `(NV ${action.requiredLevel})` : ''}</h5><p class="text-xs mt-1">${action.info}</p></div>`).join('')}</div></div>`;
   modalContent.querySelector('#closeModalBtn').onclick = closeModal; openModal();
 }
 
@@ -1634,9 +1923,10 @@ function showInventoryPanel(hero) {
       if(isCombat) canAct = !hero.hasActed && state.initOrder[state.turnIndex]?.id === hero.id;
       else canAct = !hero.hasActed;
 
-      modalContent.innerHTML = `<button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl">&times;</button><h2 class="text-2xl font-bold font-title text-lime-300 text-center">Bolsa de ${hero.name}</h2><div id="inventoryList" class="mt-4 space-y-2">${hero.inventory.length > 0 ? hero.inventory.map((item, index) => `<div class="flex justify-between items-center bg-slate-700 p-2 rounded-lg"><span>${item.name}</span><button data-index="${index}" class="item-use-btn bg-sky-600 hover:bg-sky-500 rounded px-3 py-1 text-xs" ${!canAct ? 'disabled' : ''}>Usar</button></div>`).join('') : '<p class="text-center text-slate-400">La bolsa está vacía.</p>'}</div>`;
+      modalContent.innerHTML = `<button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl">&times;</button><h2 class="text-2xl font-bold font-title text-lime-300 text-center">Bolsa de ${hero.name}</h2><div id="inventoryList" class="mt-4 space-y-2">${hero.inventory.length > 0 ? hero.inventory.map((item, index) => `<div class="flex justify-between items-center bg-slate-700 p-2 rounded-lg" data-tooltip="${item.info}"><span>${item.name}</span><button data-index="${index}" class="item-use-btn bg-sky-600 hover:bg-sky-500 rounded px-3 py-1 text-xs" ${!canAct || hero.hp <= 0 ? 'disabled' : ''}>Usar</button></div>`).join('') : '<p class="text-center text-slate-400">La bolsa está vacía.</p>'}</div>`;
       modalContent.querySelector('#closeModalBtn').onclick = closeModal;
-      modalContent.querySelectorAll('.item-use-btn').forEach(btn => { btn.onclick = () => { const itemIndex = parseInt(btn.dataset.index); const item = hero.inventory[itemIndex]; if (item && item.effect) { hero.hasActed = true; hero.canUndoMove = false; item.effect(); hero.inventory.splice(itemIndex, 1); renderPanel(); renderUI(); } }; });
+      modalContent.querySelectorAll('.item-use-btn').forEach(btn => { btn.onclick = () => { const itemIndex = parseInt(btn.dataset.index); const item = hero.inventory[itemIndex]; if (item && item.effect) { hero.hasActed = true; hero.canUndoMove = false; item.effect(hero); hero.inventory.splice(itemIndex, 1); closeModal(); renderUI(); } }; });
+      modalContent.querySelectorAll('[data-tooltip]').forEach(el => { el.addEventListener('mouseenter', e => showTooltip(e.currentTarget.dataset.tooltip, e)); el.addEventListener('mouseleave', hideTooltip); });
   };
   renderPanel(); openModal();
 }
@@ -1664,6 +1954,22 @@ function loadGame() {
             state.heroes.forEach(hero => {
                 if (hero.cls && CLASSES[hero.cls]) {
                     hero.actions = CLASSES[hero.cls].actions;
+
+                    // --- INICIO DE LA CORRECCIÓN ---
+                    // Esta lógica ahora es compatible con partidas guardadas antiguas.
+                    hero.inventory = hero.inventory.map(item => {
+                        // Si el objeto tiene una 'key' y existe en nuestra base de datos, lo reconstruimos. (Sistema Nuevo)
+                        if (item && item.key && ITEM_DATABASE[item.key]) {
+                            return { ...ITEM_DATABASE[item.key], key: item.key };
+                        }
+                        // Si no tiene 'key' pero es una poción del sistema antiguo, la migramos. (Compatibilidad)
+                        else if (item && item.name === "Poción de Curación") {
+                            return { ...ITEM_DATABASE.HEALING_POTION, key: 'HEALING_POTION' };
+                        }
+                        // Si es un objeto desconocido o corrupto, lo eliminamos para evitar errores.
+                        return null;
+                    }).filter(item => item !== null); // Limpiamos cualquier resultado nulo.
+                    // --- FIN DE LA CORRECCIÓN ---
                 }
             });
             log('<b>Partida cargada con éxito.</b>', 'game');
@@ -1685,7 +1991,7 @@ function initUI(){
   document.getElementById('btnRollInit').addEventListener('click', ()=>{ playSound('effect', 'click'); rollInitiative(); });
   document.getElementById('btnNextTurn').addEventListener('click', ()=>{ playSound('effect', 'click'); nextTurn(); });
   document.getElementById('toggleMusic').addEventListener('click', toggleMusic);
-  
+
   document.getElementById('btnSaveGame').addEventListener('click', () => { playSound('effect', 'click'); saveGame(); });
   document.getElementById('btnLoadGame').addEventListener('click', () => { playSound('effect', 'click'); loadGame(); });
 
@@ -1700,7 +2006,7 @@ function initUI(){
 document.body.addEventListener('mousemove', e => {
     const tooltip = document.getElementById('tooltip');
     const mapContainer = document.getElementById('mapContainer');
-    
+
     let tooltipX = e.clientX;
     let tooltipY = e.clientY;
 
@@ -1742,16 +2048,16 @@ function onCellHover(event, isEntering) {
               }
           }
       }
-      if (state.mode.type === 'ability-aoe') {
+      if (state.mode.type === 'ability-aoe' || state.mode.type === 'item-aoe') {
           const radius = state.mode.ability.radius || 0;
           for (let i = -radius; i <= radius; i++) for (let j = -radius; j <= radius; j++) { if (dist({x:0, y:0}, {x:i, y:j}) <= radius) { queryCellEl(x + i, y + j)?.classList.add('aoe-preview'); } }
       }
   } else {
-      hideTooltip(); 
+      hideTooltip();
       if (state.mode.type === 'attack' || state.mode.type === 'ability-target') {
           clearAdvantageIndicators();
       }
-      if (state.mode.type === 'ability-aoe') document.querySelectorAll('.aoe-preview').forEach(c => c.classList.remove('aoe-preview'));
+      if (state.mode.type === 'ability-aoe' || state.mode.type === 'item-aoe') document.querySelectorAll('.aoe-preview').forEach(c => c.classList.remove('aoe-preview'));
   }
 }
 
@@ -1801,12 +2107,12 @@ function showAiIntent(source, target) {
     canvas.width = mapContainer.scrollWidth; canvas.height = mapContainer.scrollHeight;
     const ctx = canvas.getContext('2d');
     if (!source.pos || !target.pos) return;
-    
+
     const startX = source.pos.x * 32 + 16, startY = source.pos.y * 32 + 16;
     const endX = target.pos.x * 32 + 16, endY = target.pos.y * 32 + 16;
 
     ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)'; ctx.lineWidth = 3; ctx.setLineDash([5, 5]);
-    
+
     let dashOffset = 0;
     function animate() {
         dashOffset += 0.5; ctx.lineDashOffset = -dashOffset;
@@ -1822,7 +2128,7 @@ function showKillCam(hero, onCompleteCallback) {
     const overlay = document.getElementById('kill-cam-overlay');
     const img = document.getElementById('kill-cam-image');
     img.src = HERO_PORTRAITS[hero.cls];
-    
+
     state.isAnimating = true;
     overlay.style.display = 'flex';
     setTimeout(() => {
@@ -1847,7 +2153,7 @@ function showRollResult(data) {
   const visualizer = document.getElementById('roll-visualizer');
   const { roller, roll, bonus, total, targetAC, crit, fumble } = data;
   let rollClass = '', resultClass = '', resultText = '';
-  
+
   if (crit) { rollClass = 'roll-crit'; resultClass = 'roll-success'; resultText = '¡CRÍTICO!'; }
   else if (fumble) { rollClass = 'roll-fumble'; resultClass = 'roll-fail'; resultText = '¡PIFIA!'; }
   else if (total >= targetAC) { resultClass = 'roll-success'; resultText = '¡Impacto!'; }
@@ -1856,8 +2162,8 @@ function showRollResult(data) {
   visualizer.innerHTML = `
       <div class="text-lg">${roller} ataca...</div>
       <div class="text-4xl my-2">
-          <span class="${rollClass}">${roll}</span> 
-          <span class="text-2xl text-slate-400"> ${bonus >= 0 ? '+' : ''} ${bonus} = </span> 
+          <span class="${rollClass}">${roll}</span>
+          <span class="text-2xl text-slate-400"> ${bonus >= 0 ? '+' : ''} ${bonus} = </span>
           <span class="font-bold">${total}</span>
       </div>
       <div class="text-sm text-slate-300">vs CA ${targetAC}</div>
@@ -1880,16 +2186,16 @@ function advanceTutorial(action) {
     if (!state.tutorial.active) return;
 
     const throg = state.heroes.find(h => h.cls === 'GUERRERO');
-    
+
     switch(state.tutorial.step) {
         case 0: // Esperando movimiento
             if (action.type === 'move' && action.hero.id === throg.id &&
                 action.hero.pos.x === state.tutorial.targetCell.x &&
                 action.hero.pos.y === state.tutorial.targetCell.y) {
-                
+
                 if (state.enemies.length === 0) {
                     spawnEnemyAt(14, 9, 'GOBLIN_BUROCRATA', 'basic');
-                    rollInitiative(); 
+                    rollInitiative();
                 }
 
                 state.tutorial.step++;
@@ -1906,10 +2212,10 @@ function advanceTutorial(action) {
                     showTutorialMessage("¡Mala suerte! Los dados no estuvieron de tu lado. Pulsa <b>Siguiente Turno</b> para que llegue tu oportunidad de atacar de nuevo.");
                     document.getElementById('btnNextTurn').classList.add('tutorial-highlight');
                 }
-            } 
+            }
             else if (action.type === 'enemy_killed') {
                 log("<b>TUTORIAL:</b> ¡Vaya! Ni siquiera necesitaste tu ataque especial. Impresionante.", 'game');
-                state.tutorial.step = 3; 
+                state.tutorial.step = 3;
                 checkTutorialStep();
             }
             break;
@@ -1938,7 +2244,7 @@ function checkTutorialStep() {
     if (!state.tutorial.active) return;
     const throg = state.heroes.find(h => h.cls === 'GUERRERO');
     const throgCard = document.querySelector(`[data-id="hero-${throg.id}"]`);
-    
+
     switch(state.tutorial.step) {
         case 0:
             clearHighlights();
@@ -1963,7 +2269,7 @@ function checkTutorialStep() {
             if(throg) {
                 throg.hasActed = false;
             }
-            renderUI(); 
+            renderUI();
 
             clearHighlights();
             showTutorialMessage("¡Buen golpe! Acaba con él usando tu habilidad <b>Golpe Poderoso</b> para causar daño extra.");

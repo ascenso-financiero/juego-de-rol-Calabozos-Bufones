@@ -394,3 +394,13 @@ button:disabled {
     from { transform: scale(0.2); opacity: 1; }
     to { transform: scale(3); opacity: 0; }
 }
+
+.altar::after, .libreria::after {
+    content: var(--icon-content, '❓');
+    font-size: 20px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-shadow: 0 0 4px black;
+}
